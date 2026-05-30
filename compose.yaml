@@ -1,0 +1,24 @@
+# Production: build the image and register it into the gateway Traefik.
+services:
+  traefik-viewer:
+    build: .
+    image: traefik-viewer:latest
+    container_name: traefik-viewer
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+    # The app has no built-in auth — it expects to sit behind your gateway.
+    # Adjust labels (host rule, entrypoint, middlewares) to your setup.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-viewer.rule=Host(`traefik-viewer.in.s3ntin3l8.de`)"
+      - "traefik.http.routers.traefik-viewer.entrypoints=websecure"
+      - "traefik.http.routers.traefik-viewer.tls=true"
+      - "traefik.http.services.traefik-viewer.loadbalancer.server.port=8080"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true

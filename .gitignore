@@ -20,3 +20,8 @@
 *.swp
 .idea/
 .vscode/
+
+# build artifacts / editor
+web/tsconfig.tsbuildinfo
+.claude/
+tmp/

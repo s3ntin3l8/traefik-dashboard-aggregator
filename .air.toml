@@ -1,0 +1,12 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/traefik-viewer ./cmd/server"
+  bin = "./tmp/traefik-viewer -config ./config.yaml -debug"
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "web/node_modules", "web/dist", ".git"]
+  delay = 800
+
+[misc]
+  clean_on_exit = true
