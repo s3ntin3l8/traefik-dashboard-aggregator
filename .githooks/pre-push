@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# pre-push: heavier verification before code leaves the machine.
+#   - go build + go test
+#   - frontend type-check + build (if node_modules present)
+# Skip with:  git push --no-verify
+set -uo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+fail=0
+ok()  { printf '\033[32m✓\033[0m %s\n' "$1"; }
+err() { printf '\033[31m✗\033[0m %s\n' "$1"; fail=1; }
+
+echo "▶ pre-push"
+
+# --- Go build + test --------------------------------------------------------
+if godir="$(bash scripts/find-go.sh 2>/dev/null)"; then
+  export PATH="$godir:$PATH"
+  if go build ./... >/tmp/tv-build.log 2>&1; then ok "go build"; else err "go build failed:"; sed 's/^/    /' /tmp/tv-build.log; fi
+  if go test ./... >/tmp/tv-test.log 2>&1; then ok "go test"; else err "go test failed:"; tail -20 /tmp/tv-test.log | sed 's/^/    /'; fi
+else
+  echo "  ⚠ Go toolchain not found — skipping build/test (CI will enforce)"
+fi
+
+# --- Frontend build ---------------------------------------------------------
+if command -v npm >/dev/null 2>&1; then
+  if [ -d web/node_modules ]; then
+    if (cd web && npm run build >/tmp/tv-web.log 2>&1); then ok "web build"; else err "web build failed:"; tail -20 /tmp/tv-web.log | sed 's/^/    /'; fi
+  else
+    echo "  ⚠ web/node_modules missing — run 'cd web && npm install' (CI will enforce the build)"
+  fi
+else
+  echo "  ⚠ npm not found — skipping web build (CI will enforce)"
+fi
+
+if [ "$fail" != 0 ]; then
+  echo "✗ pre-push failed — fix the above or use --no-verify to bypass"
+  exit 1
+fi
+echo "✓ pre-push passed"

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# pre-commit: fast, staged-only checks. Blocks the commit on failure.
+#   - secret/real-topology guard on staged content
+#   - gofmt on staged .go files
+#   - go vet (module-wide; quick)
+# Skip with:  git commit --no-verify
+set -uo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+fail=0
+say()  { printf '  %s\n' "$1"; }
+ok()   { printf '\033[32m✓\033[0m %s\n' "$1"; }
+err()  { printf '\033[31m✗\033[0m %s\n' "$1"; fail=1; }
+
+echo "▶ pre-commit"
+
+# --- 1. secret / real-topology guard ---------------------------------------
+# Block staged additions that look like real secrets or the private topology.
+# config.yaml and .env are gitignored, but guard anyway in case of -f adds.
+staged_files="$(git diff --cached --name-only --diff-filter=ACM)"
+if [ -n "$staged_files" ]; then
+  # Never allow these files into history.
+  while IFS= read -r f; do
+    case "$f" in
+      .env|config.yaml|*/config.yaml|*.pem|*.key|*_rsa|id_*) err "refusing to commit secret-ish file: $f" ;;
+    esac
+  done <<< "$staged_files"
+
+  # Scan added lines (the example/docs use placeholders only). Patterns are
+  # assembled from fragments so this hook's own source doesn't trip the guard.
+  # Customize REAL_IP_RE / REAL_HOST_RE for your environment.
+  REAL_IP_RE="192\.168\.""2\.[0-9]"
+  REAL_HOST_RE="in\.""s3ntin3l8\.de"
+  added="$(git diff --cached --diff-filter=ACM -U0 | grep '^+' | grep -v '^+++' || true)"
+  if printf '%s' "$added" | grep -qE "$REAL_IP_RE"; then
+    err "staged change adds a real LAN IP — use placeholders (10.0.0.x)"
+  fi
+  if printf '%s' "$added" | grep -qE "$REAL_HOST_RE"; then
+    err "staged change adds a real internal hostname — use *.example.com"
+  fi
+  # crude private-key / token markers
+  if printf '%s' "$added" | grep -qE 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY'; then
+    err "staged change contains a private key"
+  fi
+fi
+[ "$fail" = 0 ] && ok "no secrets / real topology in staged changes"
+
+# --- 2. gofmt on staged Go files -------------------------------------------
+go_staged="$(printf '%s\n' "$staged_files" | grep '\.go$' || true)"
+if [ -n "$go_staged" ]; then
+  if godir="$(bash scripts/find-go.sh 2>/dev/null)"; then
+    export PATH="$godir:$PATH"
+    unformatted="$(gofmt -l $go_staged 2>/dev/null || true)"
+    if [ -n "$unformatted" ]; then
+      err "gofmt needed on:"; printf '%s\n' "$unformatted" | sed 's/^/    /'
+      say "run: gofmt -w $unformatted"
+    else
+      ok "gofmt clean"
+    fi
+    # vet is cheap and catches real mistakes
+    if ! go vet ./... >/tmp/tv-vet.log 2>&1; then
+      err "go vet failed:"; sed 's/^/    /' /tmp/tv-vet.log
+    else
+      ok "go vet clean"
+    fi
+  else
+    say "⚠ Go toolchain not found — skipping gofmt/vet (CI will still enforce)"
+  fi
+fi
+
+if [ "$fail" != 0 ]; then
+  echo "✗ pre-commit failed — fix the above or use --no-verify to bypass"
+  exit 1
+fi
+echo "✓ pre-commit passed"

@@ -98,6 +98,28 @@ view). Other views work on any v3.
 - `GET /api/logs/query` · `GET /api/logs/tail` — Loki proxy (when configured)
 - `GET /healthz` — liveness
 
+## CI/CD
+
+**GitHub Actions** (`.github/workflows/`):
+- `ci.yml` — on every push/PR to `main`: Go `gofmt`/`vet`/`build`/`test -race`,
+  frontend typecheck + build, and a Docker image build (no push).
+- `release.yml` — publishes a multi-arch image to
+  `ghcr.io/<owner>/<repo>` — `:edge` on each push to `main`, and
+  `:vX.Y.Z` / `:X.Y` on `v*` tags.
+
+**Git hooks** (versioned in `.githooks/`, shared across clones). Enable once
+after cloning:
+```sh
+bash scripts/setup-hooks.sh    # sets core.hooksPath=.githooks
+```
+- **pre-commit** (fast, staged-only): blocks secret-ish files (`.env`,
+  `config.yaml`, keys), blocks real IPs/hostnames in staged content, runs
+  `gofmt` + `go vet` on staged Go.
+- **pre-push** (heavier): `go build` + `go test`, and the frontend build.
+
+Bypass a hook in a pinch with `--no-verify`. Hooks degrade gracefully if the Go
+toolchain or `npm` isn't present locally — CI enforces the full set regardless.
+
 ## Development without Docker
 
 ```sh
