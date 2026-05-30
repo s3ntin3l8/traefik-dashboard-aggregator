@@ -43,7 +43,7 @@ func New(cfg config.Loki, timeout time.Duration) *Client {
 // LogEntry is the normalized log line the SPA renders.
 type LogEntry struct {
 	ID         string         `json:"id"`
-	TS         int64          `json:"ts"` // unix ms
+	TS         int64          `json:"ts"`    // unix ms
 	Kind       string         `json:"kind"`  // access | system
 	Level      string         `json:"level"` // info | warning | error
 	Instance   string         `json:"instance"`
