@@ -22,13 +22,19 @@ export function Topology({ snapshot, dir, onSelect }: { snapshot: Snapshot; dir:
     <div className="panel topo-panel" ref={wrap}>
       <div className="panel-head">
         <h3>Live topology</h3>
-        <span className="muted">gateway → {snapshot.instances.length} nodes → {model.routerDots.length} routes</span>
+        <span className="muted">{model.gateway.label} → {model.instNodes.length} nodes → {model.routerDots.length} routes</span>
       </div>
       <svg className="topo" width={w} height={H} viewBox={`0 0 ${w} ${H}`}>
         <TopoEdges model={model} />
         <TopoNodes model={model} onSelect={onSelect} />
         <FlowPackets model={model} dir={dir} />
       </svg>
+      <div className="topo-cap">
+        <div className="topo-leg"><span className="packet p-ok" style={{ position: "relative", top: 0, left: 0, width: 6, height: 6, borderRadius: "50%", display: "inline-block" }}></span> live packet</div>
+        <div className="topo-leg"><span className="gw-circle" style={{ width: 10, height: 10, borderRadius: "50%", display: "inline-block", border: "1.6px solid var(--accent)" }}></span> gateway</div>
+        <div className="topo-leg"><span className="sdot s-ok"></span> healthy node</div>
+        <div className="topo-leg"><span className="rdot-ok" style={{ width: 6, height: 6, borderRadius: "50%", display: "inline-block" }}></span> healthy route</div>
+      </div>
     </div>
   );
 }
@@ -40,7 +46,21 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
   const cyc = H / 2;
   const instX = W * 0.42;
   const routerX = W - 80;
-  const insts = snapshot.instances;
+
+  // Split off the designated gateway (role==="gateway"); the rest are the
+  // downstream nodes that fan out from the hub. If none is designated, the hub
+  // stays a generic decorative node and all instances become downstream nodes.
+  const gw = snapshot.instances.find((i) => i.role === "gateway");
+  const insts = snapshot.instances.filter((i) => i.role !== "gateway");
+
+  const gateway = {
+    x: cx,
+    y: cyc,
+    label: gw ? gw.name : "gateway",
+    inst: gw || null,
+    k: gw ? statusKind(gw.status) : "ok",
+  };
+
   const instGap = Math.min(90, (H - 40) / Math.max(insts.length, 1));
   const instY0 = cyc - ((insts.length - 1) * instGap) / 2;
   const instNodes = insts.map((inst, i) => ({
@@ -54,13 +74,19 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
     const rs = snapshot.httpRouters.filter((r) => r.instance === inst.name);
     const node = instNodes[ii];
     const n = rs.length;
-    const spread = Math.min(150, n * 7);
+    const spread = Math.min(80, n * 6);
     rs.forEach((r, ri) => {
       const t = n <= 1 ? 0.5 : ri / (n - 1);
-      routerDots.push({ ...r, x: routerX - (ri % 3) * 16, y: cyc - spread / 2 + t * spread, node, k: statusKind(r.status) });
+      routerDots.push({
+        ...r,
+        x: routerX - (ri % 4) * 10,
+        y: node.y - spread / 2 + t * spread,
+        node,
+        k: statusKind(r.status),
+      });
     });
   });
-  return { gateway: { x: cx, y: cyc }, instNodes, routerDots };
+  return { gateway, instNodes, routerDots };
 }
 
 function TopoEdges({ model }: { model: TopoModel }) {
@@ -81,15 +107,21 @@ function TopoNodes({ model, onSelect }: { model: TopoModel; onSelect: (s: Sel) =
   const { gateway, instNodes, routerDots } = model;
   return (
     <g>
-      <g className="topo-node gw" transform={`translate(${gateway.x},${gateway.y})`}>
-        <circle r="22" className="gw-circle" />
-        <text className="gw-label" y="38">gateway</text>
+      <g
+        className="topo-node gw"
+        transform={`translate(${gateway.x},${gateway.y})`}
+        onClick={() => gateway.inst && onSelect({ kind: "instance", data: gateway.inst })}
+        style={{ cursor: gateway.inst ? "pointer" : "default" }}
+      >
+        <circle r="22" className={`gw-circle nc-${gateway.k}`} />
+        <text className="gw-label" y="38">{gateway.label}</text>
         <g transform="translate(-9,-9)"><Icons.globe size={18} /></g>
       </g>
       {instNodes.map((n) => (
         <g key={n.name} className="topo-node" transform={`translate(${n.x},${n.y})`} onClick={() => onSelect({ kind: "instance", data: n })} style={{ cursor: "pointer" }}>
           <circle r="13" className={`node-circle nc-${n.k}`} />
-          <text className="node-label" x="20" y="4">{n.name}</text>
+          <text className="node-label" x="22" y="-1" style={{ fontWeight: 600 }}>{n.name}</text>
+          <text className="node-label faint" x="22" y="11" style={{ fontSize: 9 }}>{n.ip}</text>
         </g>
       ))}
       {routerDots.map((r, i) => (

@@ -35,16 +35,24 @@ middlewares (sortable, searchable, with a detail drawer) · TLS Certificates
    NODE01_API_PASS=…
    ```
 
-2. **Run with Docker:**
+2. **Set your deployment specifics.** `compose.yaml` pulls the published image
+   from GHCR and ships generic labels. Put your real host rule (and any other
+   environment-specific overrides) in a gitignored `compose.override.yaml`,
+   which Docker merges automatically:
    ```sh
-   docker compose up --build -d
+   cp compose.override.example.yaml compose.override.yaml
+   # edit compose.override.yaml → set your Host(`…`) rule (and optionally pin a tag)
    ```
-   The image builds the SPA, compiles the Go binary with the assets embedded,
-   and ships on distroless. Adjust the Traefik labels in `compose.yaml` to
-   register it into your gateway (the app has no built-in auth — put it behind
-   your gateway/SSO).
 
-3. **Develop** (live reload + HMR):
+3. **Run with Docker:**
+   ```sh
+   docker compose up -d            # pulls ghcr.io/s3ntin3l8/traefik-dashboard-aggregator:latest
+   # or build locally: uncomment `build: .` in compose.yaml, then `docker compose up --build -d`
+   ```
+   The app has no built-in auth — put it behind your gateway/SSO. The published
+   image is multi-arch (amd64/arm64), distroless, with the SPA embedded.
+
+4. **Develop** (live reload + HMR):
    ```sh
    docker compose -f compose-dev.yaml up --build
    # UI on http://localhost:5173 (proxies /api to the Go backend on :8080)

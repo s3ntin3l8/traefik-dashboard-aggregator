@@ -15,6 +15,11 @@
 /.env
 !config.example.yaml
 
+# Local deploy overrides (real host rules, etc.)
+/compose.override.yaml
+/compose.override.yml
+!compose.override.example.yaml
+
 # Editor / OS
 .DS_Store
 *.swp

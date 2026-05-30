@@ -38,6 +38,7 @@ type Loki struct {
 // Instance is one downstream Traefik node to scrape.
 type Instance struct {
 	Name               string    `yaml:"name"`
+	Role               string    `yaml:"role"` // "gateway" | "node" (default)
 	URL                string    `yaml:"url"`
 	Host               string    `yaml:"host"`
 	DashboardURL       string    `yaml:"dashboardURL"`

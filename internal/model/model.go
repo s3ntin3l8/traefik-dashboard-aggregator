@@ -25,6 +25,7 @@ type Snapshot struct {
 // Instance is one downstream Traefik node's health/summary.
 type Instance struct {
 	Name         string         `json:"name"`
+	Role         string         `json:"role,omitempty"` // "gateway" | "" (node)
 	URL          string         `json:"url"`
 	IP           string         `json:"ip"`
 	DashboardURL string         `json:"dashboardURL"`
@@ -56,6 +57,7 @@ type Router struct {
 	Middlewares   []string `json:"middlewares"`
 	EntryPoints   []string `json:"entryPoints"`
 	TLS           bool     `json:"tls"`
+	CertResolver  string   `json:"certResolver,omitempty"`
 	Provider      string   `json:"provider"`
 	Instance      string   `json:"instance"`
 	Status        string   `json:"status"` // enabled | warning | error | disabled

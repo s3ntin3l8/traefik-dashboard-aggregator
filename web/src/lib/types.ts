@@ -23,6 +23,7 @@ export interface Router {
   middlewares: string[];
   entryPoints: string[];
   tls: boolean;
+  certResolver?: string;
   provider: string;
   instance: string;
   status: RouterStatus;
@@ -82,6 +83,7 @@ export interface InstanceCounts {
 
 export interface Instance {
   name: string;
+  role?: "gateway" | "node" | string;
   url: string;
   ip: string;
   dashboardURL: string;

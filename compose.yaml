@@ -1,24 +1,30 @@
-# Production: build the image and register it into the gateway Traefik.
+# Production-like compose (committed, generic). Runs the published GHCR image
+# and registers it into your gateway Traefik.
+#
+# For environment-specific values (your real host rule, extra labels, a pinned
+# image tag, etc.), create a gitignored compose.override.yaml — Docker Compose
+# merges it automatically on `docker compose up`. See compose.override.example.yaml.
+# For local development with live reload, use compose-dev.yaml instead.
 services:
   traefik-viewer:
-    build: .
-    image: traefik-viewer:latest
+    image: ghcr.io/s3ntin3l8/traefik-dashboard-aggregator:latest
+    # build: .   # uncomment to build the image locally instead of pulling from GHCR
     container_name: traefik-viewer
     restart: unless-stopped
     env_file: .env
     volumes:
       - ./config.yaml:/config/config.yaml:ro
     # The app has no built-in auth — it expects to sit behind your gateway.
-    # Adjust labels (host rule, entrypoint, middlewares) to your setup.
+    # Labels use map form so a single key can be overridden in compose.override.yaml.
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik-viewer.rule=Host(`traefik-viewer.in.s3ntin3l8.de`)"
-      - "traefik.http.routers.traefik-viewer.entrypoints=websecure"
-      - "traefik.http.routers.traefik-viewer.tls=true"
-      - "traefik.http.services.traefik-viewer.loadbalancer.server.port=8080"
+      traefik.enable: "true"
+      traefik.http.routers.traefik-viewer.rule: "Host(`traefik-viewer.example.com`)"
+      traefik.http.routers.traefik-viewer.entrypoints: "websecure"
+      traefik.http.routers.traefik-viewer.tls: "true"
+      traefik.http.services.traefik-viewer.loadbalancer.server.port: "8080"
     networks:
-      - traefik
+      - proxy
 
 networks:
-  traefik:
+  proxy:
     external: true

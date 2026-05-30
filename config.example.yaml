@@ -15,17 +15,22 @@ server:
   domain: example.com            # optional, shown in the UI
 
 # Logs view (optional). Leave url empty to disable the Logs tab.
-# labelMapping builds the base LogQL selector, e.g. {job="traefik"}.
+# Default selector is {job="docker", container="traefik"}.
+# The app automatically appends ,instance="<name>" when filtering by node.
 loki:
   url: ""                        # e.g. http://loki:3100
   username: ${LOKI_USER:-}
   password: ${LOKI_PASS:-}
-  labelMapping:
-    job: traefik
+  # labelMapping:                # optional override for the base selector
+  #   job: docker
+  #   container: traefik
 
 instances:
   # One entry per Traefik instance (gateway + each downstream node).
+  # role: "gateway" renders this instance as the central hub in the topology
+  # view. Omit it (or use role: node) for downstream nodes — that's the default.
   - name: gateway
+    role: gateway
     url: https://10.0.0.1                       # scrape the node directly by LAN IP
     host: traefik-gateway.example.com           # Host header so the node's /api router matches
     dashboardURL: https://traefik-gateway.example.com/dashboard/   # optional deep link

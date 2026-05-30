@@ -151,8 +151,13 @@ func (s *Store) build(now int64) *model.Snapshot {
 func (s *Store) instance(name string) model.Instance {
 	meta := s.meta[name]
 	h := s.health[name]
+	role := meta.Role
+	if role == "" && name == "gateway" {
+		role = "gateway" // fallback: an instance literally named "gateway"
+	}
 	in := model.Instance{
 		Name:         name,
+		Role:         role,
 		URL:          meta.URL,
 		IP:           hostOnly(meta.URL),
 		DashboardURL: meta.DashboardURL,

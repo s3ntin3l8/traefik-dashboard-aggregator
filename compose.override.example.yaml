@@ -1,0 +1,15 @@
+# Example local override for production deploys.
+#   cp compose.override.example.yaml compose.override.yaml
+# Then edit compose.override.yaml with your real values. Docker Compose loads
+# compose.override.yaml automatically and merges it over compose.yaml — map-form
+# labels merge by key, so you only need to override the keys you change.
+#
+# compose.override.yaml is gitignored; this example is committed for reference.
+services:
+  traefik-viewer:
+    labels:
+      # Your real host rule for this deployment:
+      traefik.http.routers.traefik-viewer.rule: "Host(`traefik-viewer.your-domain.example`)"
+
+    # Pin a specific image tag instead of :latest, if you prefer:
+    # image: ghcr.io/s3ntin3l8/traefik-dashboard-aggregator:v1.0.0
