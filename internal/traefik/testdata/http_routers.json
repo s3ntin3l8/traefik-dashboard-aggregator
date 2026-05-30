@@ -1,0 +1,34 @@
+[
+  {
+    "entryPoints": ["websecure"],
+    "service": "whoami@docker",
+    "rule": "Host(`whoami.example.test`)",
+    "middlewares": ["secure-headers@file"],
+    "priority": 100,
+    "tls": {"certResolver": "le"},
+    "status": "enabled",
+    "using": ["websecure"],
+    "name": "whoami@docker",
+    "provider": "docker"
+  },
+  {
+    "entryPoints": ["websecure"],
+    "service": "grafana@docker",
+    "rule": "Host(`grafana.example.test`)",
+    "priority": 90,
+    "tls": {"certResolver": "le"},
+    "status": "enabled",
+    "using": ["websecure"],
+    "name": "grafana@docker",
+    "provider": "docker"
+  },
+  {
+    "entryPoints": ["traefik"],
+    "service": "api@internal",
+    "rule": "PathPrefix(`/api`)",
+    "status": "enabled",
+    "using": ["traefik"],
+    "name": "api@internal",
+    "provider": "internal"
+  }
+]

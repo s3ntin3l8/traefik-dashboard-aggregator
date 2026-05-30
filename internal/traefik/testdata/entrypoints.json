@@ -1,0 +1,5 @@
+[
+  {"name": "web", "address": ":80"},
+  {"name": "websecure", "address": ":443"},
+  {"name": "traefik", "address": ":8080"}
+]

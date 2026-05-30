@@ -1,0 +1,32 @@
+[
+  {
+    "name": "aaaa1111",
+    "sans": ["*.example.test", "example.test"],
+    "notAfter": "2099-08-23T12:33:54Z",
+    "notBefore": "2099-05-25T12:33:55Z",
+    "serialNumber": "0123456789abcdef",
+    "commonName": "example.test",
+    "issuerOrg": "Let's Encrypt",
+    "issuerCN": "R12",
+    "issuerCountry": "US",
+    "version": "v3",
+    "keyType": "RSA",
+    "keySize": 4096,
+    "signatureAlgorithm": "SHA256-RSA",
+    "status": "enabled"
+  },
+  {
+    "name": "bbbb2222",
+    "sans": ["app.example.test"],
+    "notAfter": "2099-06-01T00:00:00Z",
+    "notBefore": "2099-03-01T00:00:00Z",
+    "serialNumber": "fedcba9876543210",
+    "commonName": "app.example.test",
+    "issuerOrg": "Let's Encrypt",
+    "issuerCN": "E5",
+    "keyType": "ECDSA",
+    "keySize": 256,
+    "signatureAlgorithm": "ECDSA-SHA384",
+    "status": "enabled"
+  }
+]

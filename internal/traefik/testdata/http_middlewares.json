@@ -1,0 +1,17 @@
+[
+  {
+    "headers": {"stsSeconds": 31536000, "frameDeny": true, "contentTypeNosniff": true},
+    "status": "enabled",
+    "usedBy": ["whoami@docker"],
+    "name": "secure-headers@file",
+    "type": "headers",
+    "provider": "file"
+  },
+  {
+    "redirectScheme": {"scheme": "https", "permanent": true},
+    "status": "enabled",
+    "name": "https-redirect@file",
+    "type": "redirectscheme",
+    "provider": "file"
+  }
+]

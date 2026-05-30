@@ -1,0 +1,22 @@
+# Go
+/traefik-viewer
+/server
+*.test
+*.out
+/tmp/
+
+# Frontend
+/web/node_modules/
+/web/dist/
+*.local
+
+# Secrets / runtime config
+/config.yaml
+/.env
+!config.example.yaml
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
