@@ -6,6 +6,10 @@ import (
 	"io/fs"
 )
 
+// dist holds the built SPA. The web/dist directory is gitignored and produced
+// by the frontend build (vite) or the Docker image build; for a bare `go build`
+// without a frontend build, CI stubs a placeholder web/dist/index.html.
+//
 //go:embed all:dist
 var dist embed.FS
 

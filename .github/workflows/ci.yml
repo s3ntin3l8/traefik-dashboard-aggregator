@@ -19,6 +19,11 @@ jobs:
         with:
           go-version: "1.23"
           cache: true
+      - name: Stub embedded assets
+        # web/dist is gitignored (built by the frontend job / Docker). The Go
+        # package embeds it via //go:embed, so provide a placeholder here so the
+        # backend compiles/tests without a real frontend build.
+        run: mkdir -p web/dist && printf '<!doctype html><title>traefik-viewer</title>' > web/dist/index.html
       - name: gofmt
         run: |
           unformatted="$(gofmt -l $(git ls-files '*.go'))"
