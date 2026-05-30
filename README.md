@@ -28,10 +28,11 @@ middlewares (sortable, searchable, with a detail drawer) · TLS Certificates
    ```sh
    cp config.example.yaml config.yaml
    ```
-   Put credentials in a gitignored `.env` (referenced from the config as `${VAR}`):
+   If an instance's `/api` requires auth, put credentials in a gitignored `.env`
+   (referenced from the config as `${VAR}`):
    ```sh
-   MGMT_API_USER=admin
-   MGMT_API_PASS=…
+   NODE01_API_USER=admin
+   NODE01_API_PASS=…
    ```
 
 2. **Run with Docker:**
@@ -63,14 +64,14 @@ loki:
   labelMapping: { job: traefik }
 
 instances:
-  - name: mgmt
-    url: https://192.168.2.157          # scrape the node directly by LAN IP
-    host: traefik.mgmt.example.com       # Host header so the node's /api router matches
-    dashboardURL: https://traefik.mgmt.example.com/dashboard/   # optional deep link
+  - name: node-01
+    url: https://10.0.0.11              # scrape the node directly by LAN IP
+    host: traefik.node-01.example.com    # Host header so the node's /api router matches
+    dashboardURL: https://traefik.node-01.example.com/dashboard/   # optional deep link
     insecureSkipVerify: true             # if the node serves a default/self-signed cert on its IP
-    basicAuth:
-      username: ${MGMT_API_USER}
-      password: ${MGMT_API_PASS}
+    # basicAuth:                          # only if /api requires auth
+    #   username: ${NODE01_API_USER}
+    #   password: ${NODE01_API_PASS}
 ```
 
 ### Reaching the downstream APIs

@@ -1,12 +1,18 @@
-# traefik-viewer configuration.
-# Secrets are referenced from the environment with ${VAR} or ${VAR:-default};
-# keep real credentials in a .env file or your orchestrator's secret store.
+# traefik-viewer configuration — example.
+#
+# Copy to config.yaml and edit. Each instance is scraped directly by its LAN IP,
+# with a `host` header so the node's `Host(...)` /api router matches. The API may
+# be open (no credentials) or protected by basic auth — see the security note.
+#
+# Secrets (if any) are referenced from the environment with ${VAR} or
+# ${VAR:-default}; keep real credentials in a .env file or your orchestrator's
+# secret store, never in this file.
 
 server:
   listenAddr: ":8080"
   pollInterval: 15s
   requestTimeout: 10s
-  domain: in.s3ntin3l8.de        # optional, shown in the UI
+  domain: example.com            # optional, shown in the UI
 
 # Logs view (optional). Leave url empty to disable the Logs tab.
 # labelMapping builds the base LogQL selector, e.g. {job="traefik"}.
@@ -18,20 +24,30 @@ loki:
     job: traefik
 
 instances:
-  - name: mgmt
-    url: https://192.168.2.157                       # /api is appended; scrape the node directly by LAN IP
-    host: traefik.mgmt.in.s3ntin3l8.de               # Host header so the node's /api router matches
-    dashboardURL: https://traefik.mgmt.in.s3ntin3l8.de/dashboard/
-    insecureSkipVerify: true                         # node serves the Traefik default cert on bare IP
-    basicAuth:
-      username: ${MGMT_API_USER:-admin}
-      password: ${MGMT_API_PASS}
+  # One entry per Traefik instance (gateway + each downstream node).
+  - name: gateway
+    url: https://10.0.0.1                       # scrape the node directly by LAN IP
+    host: traefik-gateway.example.com           # Host header so the node's /api router matches
+    dashboardURL: https://traefik-gateway.example.com/dashboard/   # optional deep link
+    insecureSkipVerify: true                    # if the node serves a default/self-signed cert on its IP
+    # basicAuth:                                 # uncomment if /api requires auth
+    #   username: ${GATEWAY_API_USER}
+    #   password: ${GATEWAY_API_PASS}
 
-  - name: dockerhost
-    url: https://192.168.2.96
-    host: traefik.dockerhost.in.s3ntin3l8.de
-    dashboardURL: https://traefik.dockerhost.in.s3ntin3l8.de/dashboard/
+  - name: node-01
+    url: https://10.0.0.11
+    host: traefik.node-01.example.com
+    dashboardURL: https://traefik.node-01.example.com/dashboard/
     insecureSkipVerify: true
-    basicAuth:
-      username: ${DOCKERHOST_API_USER:-admin}
-      password: ${DOCKERHOST_API_PASS}
+    # basicAuth:
+    #   username: ${NODE01_API_USER}
+    #   password: ${NODE01_API_PASS}
+
+  - name: node-02
+    url: https://10.0.0.12
+    host: traefik.node-02.example.com
+    dashboardURL: https://traefik.node-02.example.com/dashboard/
+    insecureSkipVerify: true
+    # basicAuth:
+    #   username: ${NODE02_API_USER}
+    #   password: ${NODE02_API_PASS}
