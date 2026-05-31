@@ -86,14 +86,20 @@ func (s *Server) requireLoki(w http.ResponseWriter) bool {
 // maxLogWindow bounds how much history a single logs query may span.
 const maxLogWindow = 7 * 24 * time.Hour
 
-// logInstance reads and validates the optional ?instance= filter. It returns
-// (value, true) when usable, or ("", false) when a non-empty value is invalid
-// (the caller has already written a 400). An empty value is valid (all streams).
-func logInstance(w http.ResponseWriter, r *http.Request) (string, bool) {
+// logInstance reads and validates the optional ?instance= filter. Empty means
+// all configured streams; non-empty values must be syntactically valid and
+// present in the configured instance allowlist.
+func (s *Server) logInstance(w http.ResponseWriter, r *http.Request) (string, bool) {
 	inst := r.URL.Query().Get("instance")
 	if inst != "" && !validInstanceName(inst) {
 		http.Error(w, `{"error":"invalid instance"}`, http.StatusBadRequest)
 		return "", false
+	}
+	if inst != "" {
+		if _, ok := s.allowedInstances[inst]; !ok {
+			http.Error(w, `{"error":"unknown instance"}`, http.StatusBadRequest)
+			return "", false
+		}
 	}
 	return inst, true
 }
@@ -105,7 +111,7 @@ func (s *Server) handleLogsQuery(w http.ResponseWriter, r *http.Request) {
 	if !s.requireLoki(w) {
 		return
 	}
-	inst, ok := logInstance(w, r)
+	inst, ok := s.logInstance(w, r)
 	if !ok {
 		return
 	}
@@ -145,7 +151,7 @@ func (s *Server) handleLogsTail(w http.ResponseWriter, r *http.Request) {
 	if !s.requireLoki(w) {
 		return
 	}
-	inst, ok := logInstance(w, r)
+	inst, ok := s.logInstance(w, r)
 	if !ok {
 		return
 	}
@@ -166,6 +172,7 @@ func (s *Server) handleLogsTail(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Accel-Buffering", "no")
 
 	since := time.Now().Add(-1 * time.Minute)
+	seen := map[string]struct{}{}
 	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
 	ctx := r.Context()
@@ -176,7 +183,7 @@ func (s *Server) handleLogsTail(w http.ResponseWriter, r *http.Request) {
 		case <-t.C:
 			now := time.Now()
 			qctx, cancel := context.WithTimeout(ctx, 8*time.Second)
-			entries, err := s.loki.QueryRange(qctx, loki.QueryParams{Instance: inst, Start: since, End: now, Limit: 200})
+			entries, err := s.loki.QueryRange(qctx, loki.QueryParams{Instance: inst, Start: tailQueryStart(since), End: now, Limit: 200})
 			cancel()
 			// BUG-1: only advance the cursor on success, else a transient
 			// Loki error would skip this window's lines once Loki recovers.
@@ -185,6 +192,10 @@ func (s *Server) handleLogsTail(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			for _, e := range entries {
+				if _, ok := seen[e.ID]; ok {
+					continue
+				}
+				seen[e.ID] = struct{}{}
 				b, _ := json.Marshal(e)
 				_, _ = w.Write([]byte("event: log\ndata: "))
 				_, _ = w.Write(b)

@@ -10,23 +10,37 @@ import (
 	"time"
 
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/aggregator"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/loki"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/sse"
 )
 
 // Server bundles the dependencies the handlers need.
 type Server struct {
-	store   *aggregator.Store
-	hub     *sse.Hub
-	loki    *loki.Client
-	spa     fs.FS
-	log     *slog.Logger
-	sseSlot *limiter
+	store            *aggregator.Store
+	hub              *sse.Hub
+	loki             *loki.Client
+	spa              fs.FS
+	log              *slog.Logger
+	sseSlot          *limiter
+	allowedInstances map[string]struct{}
 }
 
 // New builds the HTTP server handler set.
-func New(store *aggregator.Store, hub *sse.Hub, lk *loki.Client, spa fs.FS, log *slog.Logger) *Server {
-	return &Server{store: store, hub: hub, loki: lk, spa: spa, log: log, sseSlot: newLimiter(maxSSEClients)}
+func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Client, spa fs.FS, log *slog.Logger) *Server {
+	allowed := make(map[string]struct{}, len(cfg.Instances))
+	for _, in := range cfg.Instances {
+		allowed[in.Name] = struct{}{}
+	}
+	return &Server{
+		store:            store,
+		hub:              hub,
+		loki:             lk,
+		spa:              spa,
+		log:              log,
+		sseSlot:          newLimiter(maxSSEClients),
+		allowedInstances: allowed,
+	}
 }
 
 // contentSecurityPolicy allows the app's own origin plus the Google Fonts CDNs

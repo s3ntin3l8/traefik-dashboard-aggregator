@@ -64,3 +64,12 @@ func TestAdvanceSince(t *testing.T) {
 		t.Errorf("on success advanceSince = %v, want %v", got, now)
 	}
 }
+
+func TestTailQueryStartOverlapsPreviousWindow(t *testing.T) {
+	since := time.Unix(200, 0)
+	want := since.Add(-logTailOverlap)
+
+	if got := tailQueryStart(since); !got.Equal(want) {
+		t.Errorf("tailQueryStart = %v, want %v", got, want)
+	}
+}

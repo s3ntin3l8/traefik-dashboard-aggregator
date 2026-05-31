@@ -55,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := httpapi.New(store, hub, lk, spa, log)
+	srv := httpapi.New(cfg, store, hub, lk, spa, log)
 	httpServer := &http.Server{
 		Addr:              cfg.Server.ListenAddr,
 		Handler:           srv.Handler(),

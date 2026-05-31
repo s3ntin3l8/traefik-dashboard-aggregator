@@ -33,3 +33,9 @@ func advanceSince(prev, now time.Time, err error) time.Time {
 	}
 	return now
 }
+
+const logTailOverlap = 15 * time.Second
+
+func tailQueryStart(since time.Time) time.Time {
+	return since.Add(-logTailOverlap)
+}
