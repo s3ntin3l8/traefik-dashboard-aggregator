@@ -10,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/s3ntin3l8/traefik-viewer/internal/config"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/httpx"
 )
 
 // Client talks to one downstream Traefik instance's REST API. It sends a
@@ -42,7 +43,7 @@ func NewClient(in config.Instance, timeout time.Duration) *Client {
 		host: in.Host,
 		user: in.BasicAuth.Username,
 		pass: in.BasicAuth.Password,
-		http: &http.Client{Timeout: timeout, Transport: tr},
+		http: &http.Client{Timeout: timeout, Transport: tr, CheckRedirect: httpx.NoCrossHostRedirect},
 	}
 }
 

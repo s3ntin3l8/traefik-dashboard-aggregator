@@ -6,6 +6,20 @@ import { statusKind, STATUS_LABEL } from "../lib/types";
 
 export { statusKind, STATUS_LABEL };
 
+// safeHref returns the url only if it is an http(s) link, so an operator-typed
+// dashboardURL can't smuggle a javascript:/data: scheme into an anchor. Returns
+// undefined (an inert anchor) for anything else.
+export function safeHref(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.protocol === "http:" || u.protocol === "https:") return url;
+  } catch {
+    /* malformed URL */
+  }
+  return undefined;
+}
+
 type IconProps = { size?: number; fill?: string; stroke?: number; children?: ReactNode; vb?: number; d?: string };
 
 const Icon = ({ d, size = 17, fill, stroke = 2, children, vb = 24 }: IconProps) => (
@@ -65,6 +79,19 @@ export function InstanceTag({ name, snapshot }: { name: string; snapshot: Snapsh
     <span className="itag">
       <span className="dot" style={{ background: `var(--${k})` }}></span>
       {name}
+    </span>
+  );
+}
+
+export function NodeLine({ snapshot, name }: { snapshot: Snapshot; name: string }) {
+  const inst = snapshot.instances.find((i) => i.name === name);
+  if (!inst) return <span className="cell-mono muted">{name}</span>;
+  const k = statusKind(inst.status);
+  return (
+    <span className="row" style={{ gap: 8, fontSize: 12.5, color: "var(--text-dim)" }}>
+      <span className={`sdot s-${k}`}></span>
+      <span className="cell-mono">{inst.name}</span>
+      <span className="faint">· {inst.ip}</span>
     </span>
   );
 }

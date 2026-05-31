@@ -7,6 +7,10 @@
 # Secrets (if any) are referenced from the environment with ${VAR} or
 # ${VAR:-default}; keep real credentials in a .env file or your orchestrator's
 # secret store, never in this file.
+#
+# NOTE: ${...} expansion runs over the whole file, so a bare "$word" is also
+# treated as an env reference (an unset one becomes empty). If a value must
+# contain a literal "$" (e.g. a password or regex), pass it via a ${VAR} ref.
 
 server:
   listenAddr: ":8080"

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/s3ntin3l8/traefik-viewer/internal/config"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
 )
 
 // fixtureServer serves testdata/<name>.json for the matching /api path, and

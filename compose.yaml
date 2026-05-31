@@ -8,12 +8,18 @@
 services:
   traefik-viewer:
     image: ghcr.io/s3ntin3l8/traefik-dashboard-aggregator:latest
-    # build: .   # uncomment to build the image locally instead of pulling from GHCR
+    build: .   # uncomment to build the image locally instead of pulling from GHCR
     container_name: traefik-viewer
     restart: unless-stopped
     env_file: .env
     volumes:
       - ./config.yaml:/config/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "/traefik-viewer", "-healthcheck", "-config", "/config/config.yaml"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     # The app has no built-in auth — it expects to sit behind your gateway.
     # Labels use map form so a single key can be overridden in compose.override.yaml.
     labels:

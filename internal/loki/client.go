@@ -14,7 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/s3ntin3l8/traefik-viewer/internal/config"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/httpx"
 )
 
 // Client is a thin Loki HTTP client.
@@ -36,7 +37,7 @@ func New(cfg config.Loki, timeout time.Duration) *Client {
 		user:   cfg.Username,
 		pass:   cfg.Password,
 		labels: cfg.LabelMapping,
-		http:   &http.Client{Timeout: timeout},
+		http:   &http.Client{Timeout: timeout, CheckRedirect: httpx.NoCrossHostRedirect},
 	}
 }
 
@@ -62,13 +63,21 @@ type LogEntry struct {
 	Fields     map[string]any `json:"fields,omitempty"`
 }
 
-// QueryParams describe a Loki query_range request from the UI.
+// QueryParams describe a Loki query_range request from the UI. The stream
+// selector is always built server-side from config (see SelectorFor); the UI
+// may only narrow it to a single, validated instance. This makes it impossible
+// for a client to broaden the query to streams it shouldn't see — the proxy
+// runs with the server's Loki credentials.
 type QueryParams struct {
-	Query string // LogQL; empty -> default selector
-	Start time.Time
-	End   time.Time
-	Limit int
+	Instance string // optional, pre-validated label value; "" -> all configured streams
+	Start    time.Time
+	End      time.Time
+	Limit    int
 }
+
+// maxLimit caps the number of log lines a single query may request so a caller
+// cannot ask Loki for an unbounded result set.
+const maxLimit = 5000
 
 type lokiQueryResponse struct {
 	Data struct {
@@ -80,10 +89,10 @@ type lokiQueryResponse struct {
 }
 
 // DefaultSelector builds a base LogQL selector from the configured label map,
-// defaulting to {job="traefik"}.
+// defaulting to {job="docker", container="traefik"}.
 func (c *Client) DefaultSelector() string {
 	if len(c.labels) == 0 {
-		return `{job="traefik"}`
+		return `{job="docker", container="traefik"}`
 	}
 	parts := make([]string, 0, len(c.labels))
 	for k, v := range c.labels {
@@ -92,14 +101,26 @@ func (c *Client) DefaultSelector() string {
 	return "{" + strings.Join(parts, ",") + "}"
 }
 
+// SelectorFor returns the base selector, optionally narrowed to a single
+// instance. The instance value is %q-escaped so it cannot break out of the
+// LogQL string literal; callers must still validate it against an allowlist.
+func (c *Client) SelectorFor(instance string) string {
+	base := c.DefaultSelector()
+	if instance == "" {
+		return base
+	}
+	// Insert the instance matcher before the closing brace.
+	return base[:len(base)-1] + fmt.Sprintf(", instance=%q", instance) + "}"
+}
+
 // QueryRange fetches and normalizes log lines for the given window.
 func (c *Client) QueryRange(ctx context.Context, p QueryParams) ([]LogEntry, error) {
-	q := p.Query
-	if strings.TrimSpace(q) == "" {
-		q = c.DefaultSelector()
-	}
+	q := c.SelectorFor(p.Instance)
 	if p.Limit <= 0 {
 		p.Limit = 500
+	}
+	if p.Limit > maxLimit {
+		p.Limit = maxLimit
 	}
 	u := c.base + "/loki/api/v1/query_range"
 	vals := url.Values{}
