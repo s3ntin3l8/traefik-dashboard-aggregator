@@ -1,14 +1,15 @@
-# Production-like compose (committed, generic). Runs the published GHCR image
-# and registers it into your gateway Traefik.
+# Production-like compose (committed). Runs the published GHCR image and
+# registers it into your gateway Traefik.
 #
-# For environment-specific values (your real host rule, extra labels, a pinned
-# image tag, building the image locally instead of pulling, etc.), create a
-# gitignored compose.override.yaml — Docker Compose merges it automatically on
-# `docker compose up`. See compose.override.example.yaml.
-# For local development with live reload, use compose-dev.yaml instead.
+# Edit this file for your deployment: set your real host rule in the Host(`…`)
+# label below, put any instance credentials in a gitignored .env, optionally pin
+# an image tag or build locally, and uncomment the forward-auth block to require
+# login. For local development with live reload, use compose-dev.yaml instead.
 services:
   traefik-viewer:
     image: ghcr.io/s3ntin3l8/traefik-dashboard-aggregator:latest
+    # Pin a specific tag instead of :latest, or build locally by replacing the
+    # image: line above with `build: .`
     container_name: traefik-viewer
     restart: unless-stopped
     env_file: .env
@@ -21,13 +22,28 @@ services:
       start_period: 10s
       retries: 3
     # The app has no built-in auth — it expects to sit behind your gateway.
-    # Labels use map form so a single key can be overridden in compose.override.yaml.
     labels:
       traefik.enable: "true"
-      traefik.http.routers.traefik-viewer.rule: "Host(`traefik-viewer.example.com`)"
+      traefik.http.routers.traefik-viewer.rule: "Host(`traefik-viewer.example.com`)"  # ← set your host
       traefik.http.routers.traefik-viewer.entrypoints: "websecure"
       traefik.http.routers.traefik-viewer.tls: "true"
       traefik.http.services.traefik-viewer.loadbalancer.server.port: "8080"
+
+      # --- Require login via authentik (forward auth) — optional ----------------
+      # Full guide: docs/authentik.md. Define the `authentik` + `strip-identity`
+      # middlewares in your Traefik dynamic config (@file) first. The app does no
+      # auth itself, so keep :8080 unpublished (this compose already does) and
+      # strip client-supplied identity headers at the edge.
+      #
+      # Protect the app router (strip first, then auth):
+      # traefik.http.routers.traefik-viewer.middlewares: "strip-identity@file,authentik@file"
+      #
+      # Route the outpost path to authentik (login flow + logout link) — a
+      # separate, more-specific router pointing at your authentik service:
+      # traefik.http.routers.traefik-viewer-outpost.rule: "Host(`traefik-viewer.example.com`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      # traefik.http.routers.traefik-viewer-outpost.entrypoints: "websecure"
+      # traefik.http.routers.traefik-viewer-outpost.tls: "true"
+      # traefik.http.routers.traefik-viewer-outpost.service: "authentik"
     networks:
       - proxy
 

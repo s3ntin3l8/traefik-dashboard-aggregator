@@ -52,18 +52,15 @@ request-flow topology (gateway → nodes → router constellation):
    ```
 
 2. **Set your deployment specifics.** `compose.yaml` pulls the published image
-   from GHCR and ships generic labels. Put your real host rule (and any other
-   environment-specific overrides) in a gitignored `compose.override.yaml`,
-   which Docker merges automatically:
-   ```sh
-   cp compose.override.example.yaml compose.override.yaml
-   # edit compose.override.yaml → set your Host(`…`) rule (and optionally pin a tag)
-   ```
+   from GHCR and ships generic labels. Edit it directly: set your real host rule
+   in the `Host(`…`)` label, optionally pin an image tag or build locally, and
+   uncomment the forward-auth block to require login (see
+   [docs/authentik.md](docs/authentik.md)).
 
 3. **Run with Docker:**
    ```sh
    docker compose up -d            # pulls ghcr.io/s3ntin3l8/traefik-dashboard-aggregator:latest
-   # or build locally: uncomment `build: .` in compose.yaml, then `docker compose up --build -d`
+   # or build locally: replace `image:` with `build: .` in compose.yaml, then `docker compose up --build -d`
    ```
    The app has no built-in auth — put it behind your gateway/SSO. The published
    image is multi-arch (amd64/arm64), distroless, with the SPA embedded.

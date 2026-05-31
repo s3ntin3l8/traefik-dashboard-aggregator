@@ -84,8 +84,8 @@ http:
 
 ### b) Route the outpost path + protect the app
 
-Docker labels on the traefik-viewer service (see
-`compose.override.example.yaml`):
+Docker labels on the traefik-viewer service (the commented forward-auth block
+in `compose.yaml`):
 
 ```yaml
 labels:
