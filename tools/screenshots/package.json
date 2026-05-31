@@ -1,0 +1,14 @@
+{
+  "name": "traefik-viewer-screenshots",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Dev-only harness that renders the SPA against sanitized demo data and captures the README screenshots. Isolated from web/ so Playwright never touches the app's dependency tree.",
+  "scripts": {
+    "capture": "node capture.mjs",
+    "serve": "node mock-server.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

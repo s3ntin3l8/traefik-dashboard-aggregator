@@ -10,6 +10,9 @@
 /web/dist/
 *.local
 
+# Screenshot harness deps (tools/screenshots)
+/tools/screenshots/node_modules/
+
 # Secrets / runtime config
 /config.yaml
 /.env

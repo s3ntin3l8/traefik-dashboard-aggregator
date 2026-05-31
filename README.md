@@ -32,6 +32,11 @@ request-flow topology (gateway → nodes → router constellation):
 
 ![Overview](docs/screenshots/overview.png)
 
+**Topology** — animated request flow from the gateway out to each node and its
+router constellation; problem routers light up amber/red:
+
+![Topology](docs/screenshots/topology.png)
+
 | Certificates — expiry tracking | Logs — via Loki |
 | :---: | :---: |
 | ![Certificates](docs/screenshots/certificates.png) | ![Logs](docs/screenshots/logs.png) |
