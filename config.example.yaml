@@ -21,6 +21,9 @@ server:
   # (the app has no built-in auth — see docs/authentik.md). Defaults to
   # authentik's "/outpost.goauthentik.io/sign_out"; set to "" to hide the link.
   # signOutPath: /outpost.goauthentik.io/sign_out
+  # Domain-level authentik (session shared across a parent host): point this at
+  # the auth host so logout clears the session at the right place, e.g.
+  # signOutPath: https://auth.example.com/outpost.goauthentik.io/sign_out
 
 # Logs view (optional). Leave url empty to disable the Logs tab.
 # Default selector is {job="docker", container="traefik"}.
