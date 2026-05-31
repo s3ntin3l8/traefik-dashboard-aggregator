@@ -430,13 +430,18 @@ button { font-family: inherit; cursor: pointer; }
 .hcard {
   display: flex; align-items: center; gap: 14px; padding: 14px 16px;
   border: var(--border-style); border-radius: var(--radius); background: var(--panel-2);
-  position: relative; overflow: hidden; transition: border-color .15s; cursor: pointer;
+  position: relative; overflow: hidden; cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
 }
-.hcard:hover { border-color: var(--border-strong); }
-.hcard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+.hcard:hover { border-color: var(--border-strong); transform: translateY(-2px); box-shadow: var(--shadow-lg, var(--shadow)); }
+.hcard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; transition: width .15s ease, box-shadow .15s ease; }
 .hcard.ok::before { background: var(--ok); }
 .hcard.degraded::before { background: var(--warn); }
 .hcard.unreachable::before { background: var(--down); }
+.hcard:hover::before { width: 4px; }
+.hcard.ok:hover::before { box-shadow: 0 0 8px var(--ok); }
+.hcard.degraded:hover::before { box-shadow: 0 0 8px var(--warn); }
+.hcard.unreachable:hover::before { box-shadow: 0 0 8px var(--down); }
 .hcard-main { flex: 1; min-width: 0; }
 .hcard-name { font-family: var(--font-mono); font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 9px; }
 .hcard-meta { font-size: 11.5px; color: var(--text-faint); margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
@@ -460,7 +465,8 @@ button { font-family: inherit; cursor: pointer; }
 
 /* instances detail page cards */
 .inst-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 16px; }
-.inst-card { background: var(--panel); border: var(--border-style); border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow: hidden; }
+.inst-card { background: var(--panel); border: var(--border-style); border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow: hidden; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.inst-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg, var(--shadow)); border-color: var(--border-strong); }
 .inst-top { padding: 16px 18px; display: flex; align-items: flex-start; gap: 12px; border-bottom: var(--border-style); }
 .inst-body { padding: 14px 18px; }
 .inst-stat-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 4px; }
@@ -690,7 +696,9 @@ button { font-family: inherit; cursor: pointer; }
 .gw-circle { fill: var(--panel-2); stroke: var(--accent); stroke-width: 1.6; }
 .gw-label, .node-label { font-family: var(--font-mono); fill: var(--text-dim); font-size: 10px; }
 .node-circle { fill: var(--panel-2); stroke-width: 1.6; }
-.nc-ok { stroke: var(--ok); } .nc-warn { stroke: var(--warn); } .nc-down { stroke: var(--down); }
+.gw-circle, .node-circle { transform-box: fill-box; transform-origin: center; transition: transform .15s ease, filter .15s ease; }
+.topo-node:hover .gw-circle, .topo-node:hover .node-circle { transform: scale(1.15); filter: drop-shadow(0 0 6px currentColor); }
+.nc-ok { stroke: var(--ok); color: var(--ok); } .nc-warn { stroke: var(--warn); color: var(--warn); } .nc-down { stroke: var(--down); color: var(--down); }
 .rdot { cursor: pointer; transform-box: fill-box; transform-origin: center; transition: transform .15s ease, filter .15s ease; }
 .rdot:hover { transform: scale(2.1); filter: drop-shadow(0 0 5px currentColor); }
 .rdot-ok { fill: var(--ok); color: var(--ok); } .rdot-warn { fill: var(--warn); color: var(--warn); } .rdot-down { fill: var(--down); color: var(--down); }

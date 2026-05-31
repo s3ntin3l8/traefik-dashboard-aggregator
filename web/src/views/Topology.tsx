@@ -124,6 +124,7 @@ function TopoNodes({ model, onSelect }: { model: TopoModel; onSelect: (s: Sel) =
       {instNodes.map((n) => (
         <g key={n.name} className="topo-node" transform={`translate(${n.x},${n.y})`} onClick={() => onSelect({ kind: "instance", data: n })} style={{ cursor: "pointer" }}>
           <circle r="13" className={`node-circle nc-${n.k}`} />
+          <g transform="translate(-6.5,-6.5)" style={{ color: `var(--${n.k})` }}><Icons.server size={13} /></g>
           <text className="node-label" x="22" y="-1" style={{ fontWeight: 600 }}>{n.name}</text>
           <text className="node-label faint" x="22" y="11" style={{ fontSize: 9 }}>{n.ip}</text>
         </g>
