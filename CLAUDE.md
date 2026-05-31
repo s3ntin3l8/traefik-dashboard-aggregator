@@ -116,4 +116,4 @@ Single-page app; navigation is tab state in `App.tsx` (no router library). Key f
 ### CI
 
 - **`ci.yml`**: gofmt → go vet → go build → go test -race → govulncheck → frontend typecheck + build → Docker image build (no push)
-- **`release.yml`**: publishes multi-arch image to GHCR on `main` (`:edge`) and `v*` tags (`:vX.Y.Z`, `:X.Y`)
+- **`release.yml`**: publishes multi-arch image to GHCR on `v*` tags only (`:X.Y.Z`, `:X.Y`, `:latest`); pushes to `main` are build-validated by `ci.yml` but not published

@@ -155,9 +155,10 @@ view). Other views work on any v3.
 **GitHub Actions** (`.github/workflows/`):
 - `ci.yml` — on every push/PR to `main`: Go `gofmt`/`vet`/`build`/`test -race`,
   frontend typecheck + build, and a Docker image build (no push).
-- `release.yml` — publishes a multi-arch image to
-  `ghcr.io/<owner>/<repo>` — `:edge` on each push to `main`, and
-  `:vX.Y.Z` / `:X.Y` on `v*` tags.
+- `release.yml` — on `v*` tags only, publishes a multi-arch image to
+  `ghcr.io/<owner>/<repo>` tagged `:X.Y.Z`, `:X.Y`, `:latest` (and `:sha-…`).
+  Pushes to `main` are build-validated by `ci.yml` but not published, so the
+  registry only ever holds released images.
 
 **Git hooks** (versioned in `.githooks/`, shared across clones). Enable once
 after cloning:
