@@ -5,6 +5,7 @@ package httpapi
 import (
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +15,14 @@ import (
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/loki"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/sse"
 )
+
+// The runtime image is distroless and ships no /etc/mime.types, so Go's mime
+// package only knows its builtin extensions (.svg/.png resolve; .ico is content
+// sniffed). .webmanifest is unknown and would be served as text/plain, which
+// X-Content-Type-Options: nosniff makes browsers reject. Register it explicitly.
+func init() {
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
+}
 
 // Server bundles the dependencies the handlers need.
 type Server struct {

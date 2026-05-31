@@ -1,0 +1,15 @@
+{
+  "name": "Traefik Dashboard Aggregator",
+  "short_name": "Traefik Agg",
+  "description": "Aggregate dashboard for multiple Traefik instances.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c0e16",
+  "theme_color": "#0c0e16",
+  "icons": [
+    { "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

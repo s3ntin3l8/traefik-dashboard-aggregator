@@ -56,7 +56,7 @@ export function Settings({ t, setTweak, lokiEnabled }: {
         <div className="panel">
           <div className="panel-head"><span className="panel-title">About</span></div>
           <div className="panel-body settings-body">
-            <div className="kv"><span>App</span><span>traefik-viewer</span></div>
+            <div className="kv"><span>App</span><span>Traefik Dashboard Aggregator</span></div>
             <div className="kv"><span>Logs (Loki)</span><span>{lokiEnabled ? "enabled" : "not configured"}</span></div>
             <div className="kv"><span>Data</span><span>live via SSE</span></div>
           </div>

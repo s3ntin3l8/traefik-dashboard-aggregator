@@ -39,6 +39,8 @@ const NAV_GROUPS: { label?: string; items: { id: string; label: string; icon: st
 ];
 const NAV = NAV_GROUPS.flatMap((g) => g.items).concat([{ id: "settings", label: "Settings", icon: "cog", title: "Settings" }]);
 
+const APP_NAME = "Traefik Dashboard Aggregator";
+
 export function App() {
   const [t, setTweak] = useTweaks();
   const { snapshot, connected, authExpired } = useSnapshot();
@@ -53,6 +55,13 @@ export function App() {
 
   useEffect(() => { fetchFeatures().then((f) => setLokiEnabled(f.lokiEnabled)); }, []);
   useEffect(() => { fetchMe().then(setMe); }, []);
+
+  // Reflect the active view in the tab title, e.g. "HTTP Routers · Traefik Dashboard Aggregator".
+  useEffect(() => {
+    const item = NAV.find((n) => n.id === tab);
+    const label = item?.title || item?.label || "";
+    document.title = label ? `${label} · ${APP_NAME}` : APP_NAME;
+  }, [tab]);
 
   // "/" focuses search
   useEffect(() => {
@@ -110,8 +119,8 @@ export function App() {
         <div className="brand">
           <div className="brand-mark"><Icons.pulse size={17} /></div>
           <div>
-            <div className="brand-name">traefik-viewer</div>
-            <div className="brand-sub">aggregate dashboard</div>
+            <div className="brand-name">Traefik</div>
+            <div className="brand-sub">Dashboard Aggregator</div>
           </div>
         </div>
         <nav className="nav">
