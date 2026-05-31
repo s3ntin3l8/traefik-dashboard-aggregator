@@ -109,6 +109,22 @@ func TestScrapeTransformsFixtures(t *testing.T) {
 			}
 		}
 	}
+
+	for _, m := range res.Middlewares {
+		switch m.FullName {
+		case "secure-headers@file":
+			// type "headers" matches its config key exactly (fast path).
+			if m.Config["stsSeconds"] != float64(31536000) {
+				t.Errorf("secure-headers config = %v, want stsSeconds populated", m.Config)
+			}
+		case "https-redirect@file":
+			// type "redirectscheme" but config is under "redirectScheme":
+			// must be found case-insensitively.
+			if m.Config["scheme"] != "https" || m.Config["permanent"] != true {
+				t.Errorf("https-redirect config = %v, want scheme=https permanent=true", m.Config)
+			}
+		}
+	}
 }
 
 func TestHostFromRule(t *testing.T) {

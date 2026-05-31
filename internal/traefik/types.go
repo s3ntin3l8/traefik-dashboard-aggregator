@@ -151,6 +151,16 @@ func middlewareConfig(raw rawMiddleware, mwType string) map[string]any {
 	if cfg, ok := raw[mwType].(map[string]any); ok {
 		return cfg
 	}
+	// Traefik reports the type in lower case (e.g. "redirectscheme") while the
+	// config block is keyed by the original camelCase name (e.g.
+	// "redirectScheme"), so fall back to a case-insensitive match.
+	for k, v := range raw {
+		if strings.EqualFold(k, mwType) {
+			if cfg, ok := v.(map[string]any); ok {
+				return cfg
+			}
+		}
+	}
 	return map[string]any{}
 }
 
