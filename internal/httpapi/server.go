@@ -24,6 +24,7 @@ type Server struct {
 	log              *slog.Logger
 	sseSlot          *limiter
 	allowedInstances map[string]struct{}
+	signOutPath      string
 }
 
 // New builds the HTTP server handler set.
@@ -31,6 +32,10 @@ func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Cli
 	allowed := make(map[string]struct{}, len(cfg.Instances))
 	for _, in := range cfg.Instances {
 		allowed[in.Name] = struct{}{}
+	}
+	signOut := ""
+	if cfg.Server.SignOutPath != nil {
+		signOut = *cfg.Server.SignOutPath
 	}
 	return &Server{
 		store:            store,
@@ -40,6 +45,7 @@ func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Cli
 		log:              log,
 		sseSlot:          newLimiter(maxSSEClients),
 		allowedInstances: allowed,
+		signOutPath:      signOut,
 	}
 }
 
@@ -63,6 +69,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/logs/query", s.handleLogsQuery)
 	mux.HandleFunc("GET /api/logs/tail", s.handleLogsTail)
 	mux.HandleFunc("GET /api/config", s.handleConfig)
+	mux.HandleFunc("GET /api/me", s.handleMe)
 	mux.Handle("GET /", s.spaHandler())
 	return recoverMiddleware(s.log, securityHeaders(logMiddleware(s.log, mux)))
 }

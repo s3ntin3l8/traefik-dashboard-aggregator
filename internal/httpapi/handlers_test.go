@@ -1,10 +1,52 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
+
+// handleMe reflects forward-auth identity headers (e.g. authentik) for display
+// only. Present headers are echoed; absent ones must yield empty strings, not a
+// panic, so the no-proxy path still works.
+func TestHandleMe(t *testing.T) {
+	s := testServer(t, nil)
+
+	// With injected identity headers.
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	req.Header.Set("X-authentik-username", "alice")
+	req.Header.Set("X-authentik-email", "alice@example.com")
+	s.handleMe(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var got map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got["user"] != "alice" {
+		t.Errorf("user = %q, want alice", got["user"])
+	}
+	if got["email"] != "alice@example.com" {
+		t.Errorf("email = %q, want alice@example.com", got["email"])
+	}
+
+	// Without headers (no proxy): empty identity, never a panic.
+	rr = httptest.NewRecorder()
+	s.handleMe(rr, httptest.NewRequest(http.MethodGet, "/api/me", nil))
+	got = nil
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got["user"] != "" {
+		t.Errorf("user = %q, want empty without proxy", got["user"])
+	}
+}
 
 func TestValidInstanceName(t *testing.T) {
 	cases := []struct {

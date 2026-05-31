@@ -3,9 +3,14 @@ import type { Snapshot } from "./types";
 
 // useSnapshot subscribes to the backend SSE stream and returns the latest
 // aggregated snapshot. It falls back to a one-shot fetch if SSE fails.
-export function useSnapshot(): { snapshot: Snapshot | null; connected: boolean } {
+//
+// `authExpired` is set when the initial fetch is bounced with a 401 by an
+// upstream forward-auth proxy (session expired at the edge). The proxy handles
+// the actual re-login on a full navigation, so the UI just prompts a reload.
+export function useSnapshot(): { snapshot: Snapshot | null; connected: boolean; authExpired: boolean } {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [connected, setConnected] = useState(false);
+  const [authExpired, setAuthExpired] = useState(false);
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -13,8 +18,14 @@ export function useSnapshot(): { snapshot: Snapshot | null; connected: boolean }
 
     // initial fetch so the UI paints fast even before the first SSE frame
     fetch("/api/snapshot")
-      .then((r) => r.json())
-      .then((d) => !cancelled && setSnapshot(d))
+      .then((r) => {
+        if (r.status === 401) {
+          if (!cancelled) setAuthExpired(true);
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => !cancelled && d && setSnapshot(d))
       .catch(() => {});
 
     const es = new EventSource("/api/events");
@@ -23,6 +34,7 @@ export function useSnapshot(): { snapshot: Snapshot | null; connected: boolean }
       try {
         setSnapshot(JSON.parse((e as MessageEvent).data));
         setConnected(true);
+        if (!cancelled) setAuthExpired(false);
       } catch {
         /* ignore malformed frame */
       }
@@ -36,7 +48,7 @@ export function useSnapshot(): { snapshot: Snapshot | null; connected: boolean }
     };
   }, []);
 
-  return { snapshot, connected };
+  return { snapshot, connected, authExpired };
 }
 
 // fetchLogs queries the backend Loki proxy for a time window. The stream
@@ -64,5 +76,21 @@ export async function fetchFeatures(): Promise<{ lokiEnabled: boolean }> {
     return await r.json();
   } catch {
     return { lokiEnabled: false };
+  }
+}
+
+// Identity reflected from an upstream forward-auth proxy (e.g. authentik). All
+// fields are empty when no proxy fronts the app (e.g. local dev), in which case
+// the UI shows no identity block. Display-only: the app enforces no auth itself.
+export type Identity = { user: string; email: string; name: string; groups: string; signOutPath: string };
+
+export async function fetchMe(): Promise<Identity> {
+  const empty: Identity = { user: "", email: "", name: "", groups: "", signOutPath: "" };
+  try {
+    const r = await fetch("/api/me");
+    if (!r.ok) return empty;
+    return { ...empty, ...(await r.json()) };
+  } catch {
+    return empty;
   }
 }

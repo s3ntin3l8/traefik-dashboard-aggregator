@@ -30,6 +30,11 @@ type Server struct {
 	PollInterval   time.Duration `yaml:"pollInterval"`
 	RequestTimeout time.Duration `yaml:"requestTimeout"`
 	Domain         string        `yaml:"domain"`
+	// SignOutPath is the URL the UI's logout link points at when an upstream
+	// forward-auth proxy is in front (see docs/authentik.md). Display-only: the
+	// app enforces no auth itself. Left unset it defaults to authentik's outpost
+	// sign-out endpoint; set it explicitly to "" to hide the logout link.
+	SignOutPath *string `yaml:"signOutPath"`
 }
 
 // Loki configures the optional logs backend. Empty URL disables the Logs view.
@@ -61,6 +66,9 @@ const (
 	defaultListenAddr     = ":8080"
 	defaultPollInterval   = 15 * time.Second
 	defaultRequestTimeout = 10 * time.Second
+	// defaultSignOutPath is authentik's outpost sign-out endpoint, used when an
+	// upstream forward-auth proxy fronts the app and no override is configured.
+	defaultSignOutPath = "/outpost.goauthentik.io/sign_out"
 )
 
 // Load reads, expands env references in, parses, and validates the config file.
@@ -108,6 +116,10 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Server.RequestTimeout <= 0 {
 		c.Server.RequestTimeout = defaultRequestTimeout
+	}
+	if c.Server.SignOutPath == nil {
+		def := defaultSignOutPath
+		c.Server.SignOutPath = &def
 	}
 }
 

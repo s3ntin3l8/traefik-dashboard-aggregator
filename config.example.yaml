@@ -17,6 +17,10 @@ server:
   pollInterval: 15s
   requestTimeout: 10s
   domain: example.com            # optional, shown in the UI
+  # signOutPath controls the UI logout link when fronted by a forward-auth proxy
+  # (the app has no built-in auth — see docs/authentik.md). Defaults to
+  # authentik's "/outpost.goauthentik.io/sign_out"; set to "" to hide the link.
+  # signOutPath: /outpost.goauthentik.io/sign_out
 
 # Logs view (optional). Leave url empty to disable the Logs tab.
 # Default selector is {job="docker", container="traefik"}.

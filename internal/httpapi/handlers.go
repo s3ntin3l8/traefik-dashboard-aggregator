@@ -24,6 +24,21 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"lokiEnabled": s.loki != nil})
 }
 
+// handleMe reflects the identity headers injected by an upstream forward-auth
+// proxy (e.g. authentik) back to the SPA so it can show who is signed in and a
+// logout link. Display-only: the app makes no access decisions from these
+// headers — the proxy is the sole enforcement point (see docs/authentik.md).
+// Absent headers yield empty strings, so the no-proxy dev path renders nothing.
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]any{
+		"user":        r.Header.Get("X-authentik-username"),
+		"email":       r.Header.Get("X-authentik-email"),
+		"name":        r.Header.Get("X-authentik-name"),
+		"groups":      r.Header.Get("X-authentik-groups"), // comma-separated
+		"signOutPath": s.signOutPath,
+	})
+}
+
 // handleEvents streams the snapshot over SSE: once on connect, then on every
 // change, with periodic heartbeats so proxies don't drop the idle connection.
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {

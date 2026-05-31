@@ -121,6 +121,9 @@ view). Other views work on any v3.
 - `GET /api/events` — SSE stream (snapshot on connect + on every change)
 - `GET /api/logs/query` · `GET /api/logs/tail` — Loki proxy (when configured;
   accepts an optional validated `?instance=` filter, never raw LogQL)
+- `GET /api/config` — feature flags for the SPA (e.g. `lokiEnabled`)
+- `GET /api/me` — identity reflected from an upstream forward-auth proxy
+  (display only; empty when no proxy is in front — see [docs/authentik.md](docs/authentik.md))
 - `GET /healthz` — liveness
 
 ## Security
@@ -129,7 +132,9 @@ view). Other views work on any v3.
   which exposes each node's LAN IP, hostnames, and certificate metadata) is
   served unauthenticated. **You must put traefik-viewer behind an authenticating
   reverse proxy / SSO** — this is the only access control. Don't expose it
-  directly to an untrusted network.
+  directly to an untrusted network. For a step-by-step setup with **authentik**
+  (forward auth + OIDC, with a "signed in as …" display and logout link in the
+  UI), see **[docs/authentik.md](docs/authentik.md)**.
 - **Loki proxy is scoped.** The Logs view never sends raw LogQL. The stream
   selector is built server-side from `loki.labelMapping`; the client may only
   narrow it to a single, allowlist-validated instance name. So a viewer cannot

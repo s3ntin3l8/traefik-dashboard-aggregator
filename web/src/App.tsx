@@ -1,7 +1,8 @@
 // App shell: sidebar nav (grouped), topbar (search + node chips + live clock),
 // view routing, SSE-driven snapshot, and the shared detail drawer.
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useSnapshot, fetchFeatures } from "./lib/sse";
+import { useSnapshot, fetchFeatures, fetchMe } from "./lib/sse";
+import type { Identity } from "./lib/sse";
 import { useTweaks } from "./lib/theme";
 import { statusKind } from "./lib/types";
 import { Icons, clockHMS } from "./components/ui";
@@ -40,16 +41,18 @@ const NAV = NAV_GROUPS.flatMap((g) => g.items).concat([{ id: "settings", label: 
 
 export function App() {
   const [t, setTweak] = useTweaks();
-  const { snapshot, connected } = useSnapshot();
+  const { snapshot, connected, authExpired } = useSnapshot();
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [fInstance, setFInstance] = useState<string | null>(null);
   const [fStatus, setFStatus] = useState<string | null>(null);
   const [sel, setSel] = useState<Sel | null>(null);
   const [lokiEnabled, setLokiEnabled] = useState(false);
+  const [me, setMe] = useState<Identity | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetchFeatures().then((f) => setLokiEnabled(f.lokiEnabled)); }, []);
+  useEffect(() => { fetchMe().then(setMe); }, []);
 
   // "/" focuses search
   useEffect(() => {
@@ -77,6 +80,9 @@ export function App() {
     (!q || m.name.toLowerCase().includes(q) || m.type.toLowerCase().includes(q))), [snapshot, q, fInstance]);
 
   if (!snapshot) {
+    if (authExpired) {
+      return <div className="app"><div className="boot">Session expired — <a href="" onClick={(e) => { e.preventDefault(); location.reload(); }}>reload to sign in</a></div></div>;
+    }
     return <div className="app"><div className="boot">Connecting…</div></div>;
   }
 
@@ -130,6 +136,12 @@ export function App() {
           </div>
         </nav>
         <div className="sidebar-foot">
+          {me?.user && (
+            <div className="user">
+              <span className="user-id" title={me.email || me.user}>{me.name || me.user}</span>
+              {me.signOutPath && <a className="user-out" href={me.signOutPath}>Sign out</a>}
+            </div>
+          )}
           <div className="seg">
             <button className={t.theme === "light" ? "on" : ""} onClick={() => setTweak("theme", "light")}><Icons.sun size={14} /> Light</button>
             <button className={t.theme === "dark" ? "on" : ""} onClick={() => setTweak("theme", "dark")}><Icons.moon size={14} /> Dark</button>
@@ -169,7 +181,7 @@ export function App() {
           {tab === "udp_routers" && <ProtocolView proto="udp" kind="routers" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}
           {tab === "udp_services" && <ProtocolView proto="udp" kind="services" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}
           {tab === "certificates" && <CertificatesView snapshot={snapshot} search={search} fInstance={fInstance} />}
-          {tab === "instances" && <InstancesPanel snapshot={snapshot} />}
+          {tab === "instances" && <InstancesPanel snapshot={snapshot} openTab={(t, inst) => { setTab(t); if (inst) setFInstance(inst); }} />}
           {tab === "settings" && <Settings t={t} setTweak={setTweak} lokiEnabled={lokiEnabled} />}
 
           {isHttpTable && (
