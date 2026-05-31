@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -20,5 +21,10 @@ export default defineConfig({
     // Skip Vite's inline modulepreload polyfill so the server can ship a strict
     // `script-src 'self'` CSP with no inline <script>. Targets modern browsers.
     modulePreload: { polyfill: false },
+  },
+  // Pure-logic unit tests run in a node environment (no DOM); see src/**/*.test.ts.
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"],
   },
 });

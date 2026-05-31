@@ -19,7 +19,7 @@ import (
 // IP) and basic-auth credentials.
 type Client struct {
 	name string
-	base string // e.g. https://192.168.2.157
+	base string // e.g. https://10.0.0.1
 	host string // Host header / SNI override
 	user string
 	pass string

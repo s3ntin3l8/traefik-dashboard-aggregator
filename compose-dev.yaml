@@ -3,7 +3,7 @@
 # UI:   http://localhost:5173  (proxies /api to the backend)
 services:
   backend:
-    image: golang:1.23-alpine
+    image: golang:1.25-alpine
     working_dir: /src
     command: sh -c "go run ./cmd/server -config /config/config.yaml -debug"
     env_file: .env
