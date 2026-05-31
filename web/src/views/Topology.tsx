@@ -67,11 +67,13 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
     routerCount: 0,
   }));
 
-  // Router constellation: an 8-column dot grid to the right of each node,
-  // vertically centered on the node (matches the design prototype).
-  const gridCols = 8;
-  const dotGap = 13;
-  const dotX0 = Math.min(instX + 70, routerX - (gridCols - 1) * dotGap);
+  // Router constellation: a wide dot grid to the right of each node, vertically
+  // centered on the node. More columns keep tall instances (e.g. 71 routers) short;
+  // the grid is shifted right of the node labels and uses wider horizontal spacing.
+  const gridCols = 12;
+  const dotGapX = 18;
+  const dotGapY = 13;
+  const dotX0 = Math.min(instX + 110, routerX - (gridCols - 1) * dotGapX);
   const routerDots: any[] = [];
   instNodes.forEach((node) => {
     const rs = (snapshot.httpRouters || []).filter((r) => r.instance === node.name);
@@ -80,14 +82,14 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
     rs.forEach((r, ri) => {
       routerDots.push({
         ...r,
-        x: dotX0 + (ri % gridCols) * dotGap,
-        y: node.y - ((rows - 1) * dotGap) / 2 + Math.floor(ri / gridCols) * dotGap,
+        x: dotX0 + (ri % gridCols) * dotGapX,
+        y: node.y - ((rows - 1) * dotGapY) / 2 + Math.floor(ri / gridCols) * dotGapY,
         node,
         k: statusKind(r.status),
       });
     });
   });
-  return { gateway, instNodes, routerDots, dotX0, gridCols, dotGap };
+  return { gateway, instNodes, routerDots, dotX0, gridCols, dotGapX, dotGapY };
 }
 
 function TopoEdges({ model }: { model: TopoModel }) {
@@ -98,14 +100,14 @@ function TopoEdges({ model }: { model: TopoModel }) {
         <path key={"ge" + n.name} className={`edge e-${n.k}`} d={`M${gateway.x},${gateway.y} C${(gateway.x + n.x) / 2},${gateway.y} ${(gateway.x + n.x) / 2},${n.y} ${n.x},${n.y}`} />
       ))}
       {instNodes.filter((n) => n.routerCount > 0).map((n) => (
-        <path key={"conn" + n.name} d={`M${n.x + 14},${n.y} H${dotX0 - 8}`} fill="none" stroke="var(--border-strong)" strokeWidth="1" strokeDasharray="2 3" />
+        <path key={"conn" + n.name} d={`M${n.x + 14},${n.y} H${dotX0 - 8}`} fill="none" stroke={`var(--${n.k})`} strokeWidth="1" strokeOpacity="0.4" strokeDasharray="2 3" />
       ))}
     </g>
   );
 }
 
 function TopoNodes({ model, onSelect }: { model: TopoModel; onSelect: (s: Sel) => void }) {
-  const { gateway, instNodes, routerDots, dotX0, gridCols, dotGap } = model;
+  const { gateway, instNodes, routerDots, dotX0, gridCols, dotGapX, dotGapY } = model;
   return (
     <g>
       <g
@@ -130,8 +132,8 @@ function TopoNodes({ model, onSelect }: { model: TopoModel; onSelect: (s: Sel) =
         const rows = Math.ceil(n.routerCount / gridCols);
         return (
           <text key={"rc" + n.name} className="node-label" fill="var(--text-faint)"
-            x={dotX0 + ((Math.min(n.routerCount, gridCols) - 1) * dotGap) / 2}
-            y={n.y + ((rows - 1) * dotGap) / 2 + 18} textAnchor="middle" style={{ fontSize: 9 }}>
+            x={dotX0 + ((Math.min(n.routerCount, gridCols) - 1) * dotGapX) / 2}
+            y={n.y + ((rows - 1) * dotGapY) / 2 + 18} textAnchor="middle" style={{ fontSize: 9 }}>
             {n.routerCount} routers
           </text>
         );
