@@ -680,7 +680,9 @@ button { font-family: inherit; cursor: pointer; }
 .gw-label, .node-label { font-family: var(--font-mono); fill: var(--text-dim); font-size: 10px; }
 .node-circle { fill: var(--panel-2); stroke-width: 1.6; }
 .nc-ok { stroke: var(--ok); } .nc-warn { stroke: var(--warn); } .nc-down { stroke: var(--down); }
-.rdot-ok { fill: var(--ok); } .rdot-warn { fill: var(--warn); } .rdot-down { fill: var(--down); }
+.rdot { cursor: pointer; transform-box: fill-box; transform-origin: center; transition: transform .15s ease, filter .15s ease; }
+.rdot:hover { transform: scale(2.1); filter: drop-shadow(0 0 5px currentColor); }
+.rdot-ok { fill: var(--ok); color: var(--ok); } .rdot-warn { fill: var(--warn); color: var(--warn); } .rdot-down { fill: var(--down); color: var(--down); }
 .packet { filter: drop-shadow(0 0 3px currentColor); }
 .p-ok { fill: var(--ok); } .p-warn { fill: var(--warn); } .p-down { fill: var(--down); }
 

@@ -26,10 +26,10 @@ export function Topology({ snapshot, dir, onSelect }: { snapshot: Snapshot; dir:
         <FlowPackets model={model} dir={dir} />
       </svg>
       <div className="topo-cap">
-        <div className="topo-leg"><span className="packet p-ok" style={{ position: "relative", top: 0, left: 0, width: 6, height: 6, borderRadius: "50%", display: "inline-block" }}></span> live packet</div>
+        <div className="topo-leg"><span style={{ width: 8, height: 8, borderRadius: "50%", display: "inline-block", background: "var(--ok)", boxShadow: "0 0 6px var(--ok)" }}></span> live packet</div>
         <div className="topo-leg"><span className="gw-circle" style={{ width: 10, height: 10, borderRadius: "50%", display: "inline-block", border: "1.6px solid var(--accent)" }}></span> gateway</div>
         <div className="topo-leg"><span className="sdot s-ok"></span> healthy node</div>
-        <div className="topo-leg"><span className="rdot-ok" style={{ width: 6, height: 6, borderRadius: "50%", display: "inline-block" }}></span> healthy route</div>
+        <div className="topo-leg"><span style={{ width: 8, height: 8, borderRadius: "50%", display: "inline-block", background: "var(--ok)" }}></span> healthy route</div>
       </div>
     </div>
   );
