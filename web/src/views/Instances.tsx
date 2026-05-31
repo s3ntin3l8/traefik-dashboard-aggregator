@@ -2,7 +2,7 @@
 import type { Snapshot } from "../lib/types";
 import { Icons, Badge, statusKind, timeAgo, safeHref } from "../components/ui";
 
-export function InstancesPanel({ snapshot }: { snapshot: Snapshot }) {
+export function InstancesPanel({ snapshot, openTab }: { snapshot: Snapshot; openTab: (tab: string, inst: string) => void }) {
   return (
     <div className="content-wide fade-in">
       <div className="page-head">
@@ -31,9 +31,9 @@ export function InstancesPanel({ snapshot }: { snapshot: Snapshot }) {
               {inst.error
                 ? <div className="hcard-err" style={{ marginBottom: 10 }}>{inst.error}</div>
                 : <div className="inst-stat-row">
-                    <div className="inst-stat"><div className="hc-num">{inst.counts.routers}</div><div className="hc-lab">routers</div></div>
-                    <div className="inst-stat"><div className="hc-num">{inst.counts.services}</div><div className="hc-lab">services</div></div>
-                    <div className="inst-stat"><div className="hc-num" style={inst.counts.warnings ? { color: "var(--warn)" } : undefined}>{inst.counts.warnings}</div><div className="hc-lab">warnings</div></div>
+                    <div className="inst-stat inst-stat-link" role="button" tabIndex={0} style={{ cursor: "pointer" }} title={`View routers for ${inst.name}`} onClick={() => openTab("http_routers", inst.name)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTab("http_routers", inst.name); } }}><div className="hc-num">{inst.counts.routers}</div><div className="hc-lab">routers</div></div>
+                    <div className="inst-stat inst-stat-link" role="button" tabIndex={0} style={{ cursor: "pointer" }} title={`View services for ${inst.name}`} onClick={() => openTab("http_services", inst.name)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTab("http_services", inst.name); } }}><div className="hc-num">{inst.counts.services}</div><div className="hc-lab">services</div></div>
+                    <div className="inst-stat inst-stat-link" role="button" tabIndex={0} style={{ cursor: "pointer" }} title={`View routers needing attention for ${inst.name}`} onClick={() => openTab("http_routers", inst.name)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTab("http_routers", inst.name); } }}><div className="hc-num" style={inst.counts.warnings ? { color: "var(--warn)" } : undefined}>{inst.counts.warnings}</div><div className="hc-lab">warnings</div></div>
                   </div>}
               <div className="hcard-meta" style={{ marginTop: 12, justifyContent: "space-between" }}>
                 <span>last scrape</span>
