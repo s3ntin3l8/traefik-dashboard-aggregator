@@ -11,5 +11,9 @@ services:
       # Your real host rule for this deployment:
       traefik.http.routers.traefik-viewer.rule: "Host(`traefik-viewer.your-domain.example`)"
 
+    # Build the image locally instead of pulling from GHCR (overrides the
+    # committed image:). Uncomment to develop against your own source tree:
+    # build: .
+
     # Pin a specific image tag instead of :latest, if you prefer:
     # image: ghcr.io/s3ntin3l8/traefik-dashboard-aggregator:v1.0.0

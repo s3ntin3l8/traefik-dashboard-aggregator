@@ -2,13 +2,13 @@
 # and registers it into your gateway Traefik.
 #
 # For environment-specific values (your real host rule, extra labels, a pinned
-# image tag, etc.), create a gitignored compose.override.yaml — Docker Compose
-# merges it automatically on `docker compose up`. See compose.override.example.yaml.
+# image tag, building the image locally instead of pulling, etc.), create a
+# gitignored compose.override.yaml — Docker Compose merges it automatically on
+# `docker compose up`. See compose.override.example.yaml.
 # For local development with live reload, use compose-dev.yaml instead.
 services:
   traefik-viewer:
     image: ghcr.io/s3ntin3l8/traefik-dashboard-aggregator:latest
-    build: .   # uncomment to build the image locally instead of pulling from GHCR
     container_name: traefik-viewer
     restart: unless-stopped
     env_file: .env
