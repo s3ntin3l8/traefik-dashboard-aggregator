@@ -37,30 +37,14 @@ export function Overview({ snapshot, dir, goInstance, onSelect, openTab }: {
       </div>
 
       <div className="stat-row">
-        <div className="stat">
-          <div className="stat-k">Instances</div>
-          <div className="stat-v">{insts.length - unreachable}/{insts.length}</div>
-          <div className="stat-sub">{unreachable > 0 ? `${unreachable} unreachable` : "All nodes online"}</div>
-          <div className="stat-accent"></div>
-        </div>
-        <div className="stat">
-          <div className="stat-k">HTTP Routers</div>
-          <div className="stat-v">{totalR}</div>
-          <div className="stat-sub">{probRouters.length > 0 ? `${probRouters.length} need attention` : "Healthy"}</div>
-          <div className="stat-accent"></div>
-        </div>
-        <div className="stat">
-          <div className="stat-k">Services</div>
-          <div className="stat-v">{totalS}</div>
-          <div className="stat-sub">{probServices.length > 0 ? `${probServices.length} node degraded` : "Healthy"}</div>
-          <div className="stat-accent"></div>
-        </div>
-        <div className="stat">
-          <div className="stat-k">Middlewares</div>
-          <div className="stat-v">{totalM}</div>
-          <div className="stat-sub">in use across nodes</div>
-          <div className="stat-accent"></div>
-        </div>
+        <StatCard label="Instances" value={`${insts.length - unreachable}/${insts.length}`}
+          sub={unreachable > 0 ? `${unreachable} unreachable` : "All nodes online"} onClick={() => goInstance()} />
+        <StatCard label="HTTP Routers" value={totalR}
+          sub={probRouters.length > 0 ? `${probRouters.length} need attention` : "Healthy"} onClick={() => openTab("http_routers")} />
+        <StatCard label="Services" value={totalS}
+          sub={probServices.length > 0 ? `${probServices.length} node degraded` : "Healthy"} onClick={() => openTab("http_services")} />
+        <StatCard label="Middlewares" value={totalM}
+          sub="in use across nodes" onClick={() => openTab("middlewares")} />
       </div>
 
       <div className="ov-grid">
@@ -102,6 +86,18 @@ export function Overview({ snapshot, dir, goInstance, onSelect, openTab }: {
         </div>
         <Topology snapshot={snapshot} dir={dir} onSelect={onSelect} />
       </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, onClick }: { label: string; value: string | number; sub: string; onClick: () => void }) {
+  return (
+    <div className="stat clickable" role="button" tabIndex={0} onClick={onClick}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}>
+      <div className="stat-k">{label}</div>
+      <div className="stat-v">{value}</div>
+      <div className="stat-sub">{sub}</div>
+      <div className="stat-accent"></div>
     </div>
   );
 }
