@@ -39,15 +39,16 @@ export function useSnapshot(): { snapshot: Snapshot | null; connected: boolean }
   return { snapshot, connected };
 }
 
-// fetchLogs queries the backend Loki proxy for a time window.
+// fetchLogs queries the backend Loki proxy for a time window. The stream
+// selector is built server-side; the client may only narrow it to one instance.
 export async function fetchLogs(params: {
-  query?: string;
+  instance?: string | null;
   startMs: number;
   endMs: number;
   limit?: number;
 }): Promise<import("./types").LogEntry[]> {
   const q = new URLSearchParams();
-  if (params.query) q.set("query", params.query);
+  if (params.instance) q.set("instance", params.instance);
   q.set("start", String(params.startMs));
   q.set("end", String(params.endMs));
   if (params.limit) q.set("limit", String(params.limit));

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/s3ntin3l8/traefik-viewer/internal/model"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/model"
 )
 
 // Raw Traefik REST API response shapes (v3). Only fields we use are mapped.

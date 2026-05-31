@@ -1,6 +1,11 @@
 // Package config loads and validates the YAML configuration. Secrets are kept
 // out of the file: ${ENV} / ${ENV:-default} references are expanded from the
 // environment before parsing.
+//
+// NOTE: expansion runs over the whole file, so a bare "$name" (without braces)
+// is also treated as a variable reference and replaced — an unset one becomes
+// empty. If a value legitimately contains "$" (a password, or a regex/Host
+// rule), supply it through a ${VAR} env reference rather than typing it inline.
 package config
 
 import (

@@ -19,11 +19,7 @@ export function Topology({ snapshot, dir, onSelect }: { snapshot: Snapshot; dir:
   const model = useMemo(() => buildTopo(snapshot, w, H), [snapshot, w]);
 
   return (
-    <div className="panel topo-panel" ref={wrap}>
-      <div className="panel-head">
-        <h3>Live topology</h3>
-        <span className="muted">{model.gateway.label} → {model.instNodes.length} nodes → {model.routerDots.length} routes</span>
-      </div>
+    <div className="topo-wrap" ref={wrap}>
       <svg className="topo" width={w} height={H} viewBox={`0 0 ${w} ${H}`}>
         <TopoEdges model={model} />
         <TopoNodes model={model} onSelect={onSelect} />
@@ -50,8 +46,8 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
   // Split off the designated gateway (role==="gateway"); the rest are the
   // downstream nodes that fan out from the hub. If none is designated, the hub
   // stays a generic decorative node and all instances become downstream nodes.
-  const gw = snapshot.instances.find((i) => i.role === "gateway");
-  const insts = snapshot.instances.filter((i) => i.role !== "gateway");
+  const gw = (snapshot.instances || []).find((i) => i.role === "gateway");
+  const insts = (snapshot.instances || []).filter((i) => i.role !== "gateway");
 
   const gateway = {
     x: cx,
@@ -68,43 +64,48 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
     x: instX,
     y: instY0 + i * instGap,
     k: statusKind(inst.status),
+    routerCount: 0,
   }));
+
+  // Router constellation: an 8-column dot grid to the right of each node,
+  // vertically centered on the node (matches the design prototype).
+  const gridCols = 8;
+  const dotGap = 13;
+  const dotX0 = Math.min(instX + 70, routerX - (gridCols - 1) * dotGap);
   const routerDots: any[] = [];
-  insts.forEach((inst, ii) => {
-    const rs = snapshot.httpRouters.filter((r) => r.instance === inst.name);
-    const node = instNodes[ii];
-    const n = rs.length;
-    const spread = Math.min(80, n * 6);
+  instNodes.forEach((node) => {
+    const rs = (snapshot.httpRouters || []).filter((r) => r.instance === node.name);
+    node.routerCount = rs.length;
+    const rows = Math.ceil(rs.length / gridCols);
     rs.forEach((r, ri) => {
-      const t = n <= 1 ? 0.5 : ri / (n - 1);
       routerDots.push({
         ...r,
-        x: routerX - (ri % 4) * 10,
-        y: node.y - spread / 2 + t * spread,
+        x: dotX0 + (ri % gridCols) * dotGap,
+        y: node.y - ((rows - 1) * dotGap) / 2 + Math.floor(ri / gridCols) * dotGap,
         node,
         k: statusKind(r.status),
       });
     });
   });
-  return { gateway, instNodes, routerDots };
+  return { gateway, instNodes, routerDots, dotX0, gridCols, dotGap };
 }
 
 function TopoEdges({ model }: { model: TopoModel }) {
-  const { gateway, instNodes, routerDots } = model;
+  const { gateway, instNodes, dotX0 } = model;
   return (
     <g className="topo-edges">
       {instNodes.map((n) => (
         <path key={"ge" + n.name} className={`edge e-${n.k}`} d={`M${gateway.x},${gateway.y} C${(gateway.x + n.x) / 2},${gateway.y} ${(gateway.x + n.x) / 2},${n.y} ${n.x},${n.y}`} />
       ))}
-      {routerDots.map((r, i) => (
-        <path key={"re" + i} className={`edge-thin e-${r.k}`} d={`M${r.node.x},${r.node.y} L${r.x},${r.y}`} />
+      {instNodes.filter((n) => n.routerCount > 0).map((n) => (
+        <path key={"conn" + n.name} d={`M${n.x + 14},${n.y} H${dotX0 - 8}`} fill="none" stroke="var(--border-strong)" strokeWidth="1" strokeDasharray="2 3" />
       ))}
     </g>
   );
 }
 
 function TopoNodes({ model, onSelect }: { model: TopoModel; onSelect: (s: Sel) => void }) {
-  const { gateway, instNodes, routerDots } = model;
+  const { gateway, instNodes, routerDots, dotX0, gridCols, dotGap } = model;
   return (
     <g>
       <g
@@ -114,7 +115,8 @@ function TopoNodes({ model, onSelect }: { model: TopoModel; onSelect: (s: Sel) =
         style={{ cursor: gateway.inst ? "pointer" : "default" }}
       >
         <circle r="22" className={`gw-circle nc-${gateway.k}`} />
-        <text className="gw-label" y="38">{gateway.label}</text>
+        <text className="gw-label" y="38" textAnchor="middle" style={{ fontWeight: 600 }}>{gateway.label}</text>
+        {gateway.inst && <text className="gw-label faint" y="49" textAnchor="middle" style={{ fontSize: 9 }}>{gateway.inst.ip}</text>}
         <g transform="translate(-9,-9)"><Icons.globe size={18} /></g>
       </g>
       {instNodes.map((n) => (
@@ -124,6 +126,16 @@ function TopoNodes({ model, onSelect }: { model: TopoModel; onSelect: (s: Sel) =
           <text className="node-label faint" x="22" y="11" style={{ fontSize: 9 }}>{n.ip}</text>
         </g>
       ))}
+      {instNodes.filter((n) => n.routerCount > 0).map((n) => {
+        const rows = Math.ceil(n.routerCount / gridCols);
+        return (
+          <text key={"rc" + n.name} className="node-label" fill="var(--text-faint)"
+            x={dotX0 + ((Math.min(n.routerCount, gridCols) - 1) * dotGap) / 2}
+            y={n.y + ((rows - 1) * dotGap) / 2 + 18} textAnchor="middle" style={{ fontSize: 9 }}>
+            {n.routerCount} routers
+          </text>
+        );
+      })}
       {routerDots.map((r, i) => (
         <circle key={i} className={`rdot rdot-${r.k}`} cx={r.x} cy={r.y} r="3.5" onClick={() => onSelect({ kind: "router", data: r })}>
           <title>{r.name}</title>

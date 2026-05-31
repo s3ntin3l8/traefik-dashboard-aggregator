@@ -9,26 +9,38 @@ import (
 	"strings"
 	"time"
 
-	"github.com/s3ntin3l8/traefik-viewer/internal/aggregator"
-	"github.com/s3ntin3l8/traefik-viewer/internal/loki"
-	"github.com/s3ntin3l8/traefik-viewer/internal/sse"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/aggregator"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/loki"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/sse"
 )
 
 // Server bundles the dependencies the handlers need.
 type Server struct {
-	store *aggregator.Store
-	hub   *sse.Hub
-	loki  *loki.Client
-	spa   fs.FS
-	log   *slog.Logger
+	store   *aggregator.Store
+	hub     *sse.Hub
+	loki    *loki.Client
+	spa     fs.FS
+	log     *slog.Logger
+	sseSlot *limiter
 }
 
 // New builds the HTTP server handler set.
 func New(store *aggregator.Store, hub *sse.Hub, lk *loki.Client, spa fs.FS, log *slog.Logger) *Server {
-	return &Server{store: store, hub: hub, loki: lk, spa: spa, log: log}
+	return &Server{store: store, hub: hub, loki: lk, spa: spa, log: log, sseSlot: newLimiter(maxSSEClients)}
 }
 
-// Handler returns the root mux.
+// contentSecurityPolicy allows the app's own origin plus the Google Fonts CDNs
+// it loads, and the inline styles React emits via style attributes. Scripts are
+// same-origin only (Vite's inline modulepreload polyfill is disabled in the
+// build), and framing is forbidden.
+const contentSecurityPolicy = "default-src 'self'; " +
+	"img-src 'self' data:; " +
+	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+	"font-src 'self' https://fonts.gstatic.com; " +
+	"connect-src 'self'; " +
+	"frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+
+// Handler returns the root mux wrapped in the middleware chain.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealth)
@@ -38,7 +50,33 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/logs/tail", s.handleLogsTail)
 	mux.HandleFunc("GET /api/config", s.handleConfig)
 	mux.Handle("GET /", s.spaHandler())
-	return logMiddleware(s.log, mux)
+	return recoverMiddleware(s.log, securityHeaders(logMiddleware(s.log, mux)))
+}
+
+// securityHeaders adds defense-in-depth response headers to every response.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// recoverMiddleware turns a handler panic into a logged 500 instead of letting
+// it tear down the connection silently.
+func recoverMiddleware(log *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if v := recover(); v != nil {
+				log.Error("panic in handler", "path", r.URL.Path, "err", v)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

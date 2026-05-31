@@ -17,5 +17,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    // Skip Vite's inline modulepreload polyfill so the server can ship a strict
+    // `script-src 'self'` CSP with no inline <script>. Targets modern browsers.
+    modulePreload: { polyfill: false },
   },
 });

@@ -1,7 +1,8 @@
 // TCP / UDP routers, services, middlewares + drawer. Ported from tv-tables.jsx ProtocolView.
 import { useState, useMemo } from "react";
 import type { Snapshot, Router, Service, Middleware } from "../lib/types";
-import { Icons, Badge, InstanceTag, statusKind } from "../components/ui";
+import { Icons, Badge, InstanceTag, NodeLine, statusKind, safeHref } from "../components/ui";
+import { HostRule } from "./Tables";
 import type { Sel } from "../lib/sel";
 
 type Proto = "tcp" | "udp";
@@ -10,7 +11,7 @@ type Kind = "routers" | "services" | "middlewares";
 function summarize(cfg: Record<string, unknown> | undefined): string {
   if (!cfg) return "—";
   return Object.entries(cfg)
-    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(",") : v}`)
+    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(",") : typeof v === "object" ? JSON.stringify(v) : v}`)
     .join("  ·  ");
 }
 
@@ -83,7 +84,7 @@ export function ProtocolView({ proto, kind, snapshot, search, fInstance, fStatus
               <tr key={r.id} onClick={() => setSel({ kind: "router", proto, data: r })}>
                 <td><span className={`sdot s-${statusKind(r.status)}`}></span></td>
                 <td className="cell-name cell-mono">{r.name.replace(/@.*/, "")}<span className="faint" style={{ fontWeight: 400, fontSize: 11 }}> @{r.name.split("@")[1] || "docker"}</span></td>
-                {proto === "tcp" && <td className="cell-mono muted">{r.rule}</td>}
+                {proto === "tcp" && <td className="cell-mono muted"><HostRule rule={r.rule} /></td>}
                 <td className="cell-mono muted">{(r.service || "").replace(/@.*/, "")}</td>
                 <td>{(r.entryPoints || []).map((e) => <span className="ep" key={e}>{e}</span>)}</td>
                 {proto === "tcp" && <td>{r.tls ? <span className="itag"><Icons.lock size={12} /> passthrough</span> : <span className="faint">—</span>}</td>}
@@ -121,17 +122,12 @@ export function ProtocolView({ proto, kind, snapshot, search, fInstance, fStatus
   );
 }
 
-function NodeLine({ snapshot, name }: { snapshot: Snapshot; name: string }) {
-  const inst = snapshot.instances.find((i) => i.name === name);
-  if (!inst) return null;
-  return <span className="row" style={{ gap: 8, fontSize: 12, color: "var(--text-dim)" }}><span className={`sdot s-${statusKind(inst.status)}`}></span><span className="cell-mono">{inst.name}</span><span className="faint">· {inst.ip}</span></span>;
-}
-
 function ProtoDrawer({ item, snapshot, onClose, onSelect }: { item: Sel & { proto: Proto }; snapshot: Snapshot; onClose: () => void; onSelect: (s: Sel & { proto: Proto }) => void }) {
   const { proto, kind, data } = item;
-  const svcList = proto === "tcp" ? snapshot.tcpServices : snapshot.udpServices;
+  const clean = (n: string) => n.replace(/@.*/, "");
+  const svcList = [...snapshot.httpServices, ...snapshot.tcpServices, ...snapshot.udpServices];
   const inst = snapshot.instances.find((i) => i.name === data.instance);
-  const svc = kind === "router" ? (svcList || []).find((s) => s.instance === data.instance && s.name === data.service) : data;
+  const svc = kind === "router" ? (svcList || []).find((s) => s.instance === data.instance && clean(s.name) === clean(data.service)) : data;
   return (
     <>
       <div className="scrim" onClick={onClose}></div>
@@ -149,13 +145,14 @@ function ProtoDrawer({ item, snapshot, onClose, onSelect }: { item: Sel & { prot
         <div className="drawer-body">
           {kind === "router" ? (
             <>
-              <dl className="kv">
-                {data.rule && <><dt>Rule</dt><dd>{data.rule}</dd></>}
-                <dt>Entrypoints</dt><dd>{(data.entryPoints || []).join(", ")}</dd>
-                {proto === "tcp" && <><dt>TLS</dt><dd>{data.tls ? "passthrough" : "—"}</dd></>}
-                <dt>Provider</dt><dd>{data.provider || "docker"}</dd>
-                <dt>Node</dt><dd><NodeLine snapshot={snapshot} name={data.instance} /></dd>
-              </dl>
+              <div className="kv"><span>Open</span>{data.host ? <span className="cell-host"><a href={data.tls ? `https://${data.host}` : `http://${data.host}`} target="_blank" rel="noreferrer">{data.host}</a></span> : <span className="muted">—</span>}</div>
+              {data.rule && <div className="kv"><span>Rule</span><HostRule rule={data.rule} /></div>}
+              <div className="kv"><span>Entrypoints</span><span>{(data.entryPoints || []).join(", ")}</span></div>
+              {proto === "tcp" && <div className="kv"><span>TLS</span><span>{data.tls ? `enabled${data.certResolver ? ` (${data.certResolver})` : ""}` : <span className="muted">disabled</span>}</span></div>}
+              {(data.priority || 0) > 0 && <div className="kv"><span>Priority</span><span>{data.priority}</span></div>}
+              <div className="kv"><span>Provider</span><span>{data.provider || "docker"}</span></div>
+              <div className="kv"><span>Node</span><NodeLine snapshot={snapshot} name={data.instance} /></div>
+
               <div className="sec-label">Stream chain</div>
               <div className="chain">
                 <div className="chain-step"><span className="faint cell-mono" style={{ width: 64, fontSize: 11 }}>entry</span><div className="chain-node">{(data.entryPoints || []).join(", ")} <span className="faint">{proto}</span></div></div>
@@ -168,8 +165,8 @@ function ProtoDrawer({ item, snapshot, onClose, onSelect }: { item: Sel & { prot
                   );
                 })}
                 <div className="chain-step"><span className="faint cell-mono" style={{ width: 64, fontSize: 11 }}>service</span>
-                  <div className="chain-node" style={{ cursor: svc ? "pointer" : "default", borderColor: "var(--accent)" }} onClick={() => svc && onSelect({ kind: "service", proto, data: svc })}>
-                    {data.service} {svc && <span className={`sdot s-${statusKind(svc.status)}`} style={{ marginLeft: 6 }}></span>}
+                  <div className="chain-node svc-node" style={{ cursor: svc ? "pointer" : "default", borderColor: "var(--accent)" }} onClick={() => svc && onSelect({ kind: "service", proto, data: svc })}>
+                    {data.service.replace(/@.*/, "")} {svc && <span className={`sdot s-${statusKind(svc.status)}`} style={{ marginLeft: 6 }}></span>}
                   </div>
                 </div>
               </div>
@@ -180,29 +177,35 @@ function ProtoDrawer({ item, snapshot, onClose, onSelect }: { item: Sel & { prot
             </>
           ) : kind === "middleware" ? (
             <>
-              <dl className="kv">
-                <dt>Type</dt><dd>{data.type}</dd>
-                <dt>Provider</dt><dd>{data.provider}</dd>
-                <dt>Scope</dt><dd>tcp</dd>
-                <dt>Used by</dt><dd>{data.usedBy} router{data.usedBy === 1 ? "" : "s"}</dd>
-                <dt>Node</dt><dd><NodeLine snapshot={snapshot} name={data.instance} /></dd>
-              </dl>
+              <div className="kv"><span>Type</span><span>{data.type}</span></div>
+              <div className="kv"><span>Provider</span><span>{data.provider}</span></div>
+              <div className="kv"><span>Scope</span><span>tcp</span></div>
+              <div className="kv"><span>Used by</span><span>{data.usedBy} router{data.usedBy === 1 ? "" : "s"}</span></div>
+              <div className="kv"><span>Node</span><NodeLine snapshot={snapshot} name={data.instance} /></div>
+              
               <div className="sec-label">Configuration</div>
               <pre className="code">{JSON.stringify(data.config, null, 2)}</pre>
+              {(data.usedByRouters || []).length > 0 && (
+                <>
+                  <div className="sec-label">Attached routers</div>
+                  <div className="usedby-list">
+                    {data.usedByRouters.map((u: string) => <span className="usedby-item" key={u}>{u.replace(/@.*/, "")}</span>)}
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <>
-              <dl className="kv">
-                <dt>Type</dt><dd>{proto} loadbalancer</dd>
-                <dt>Health</dt><dd>{data.serversUp}/{data.serversTotal} servers up</dd>
-                <dt>Used by</dt><dd>{(data.usedBy || []).join(", ") || "—"}</dd>
-                <dt>Node</dt><dd><NodeLine snapshot={snapshot} name={data.instance} /></dd>
-              </dl>
+              <div className="kv"><span>Type</span><span>{proto} loadbalancer</span></div>
+              <div className="kv"><span>Health</span><span>{data.serversUp}/{data.serversTotal} servers up</span></div>
+              <div className="kv"><span>Used by</span><span>{(data.usedBy || []).join(", ") || "—"}</span></div>
+              <div className="kv"><span>Node</span><NodeLine snapshot={snapshot} name={data.instance} /></div>
+              
               <div className="sec-label">Servers</div>
               <pre className="code">{(data.servers || []).map((s: any) => `${s.status === "DOWN" ? "✕" : "✓"} ${s.address || s.url}  ${s.status || "UP"}`).join("\n")}</pre>
             </>
           )}
-          {inst && inst.dashboardURL && <a className="dlink" style={{ marginTop: 14 }} href={inst.dashboardURL} target="_blank" rel="noreferrer">Open {data.instance} dashboard <Icons.ext /></a>}
+          {inst && safeHref(inst.dashboardURL) && <a className="dlink" style={{ marginTop: 14 }} href={safeHref(inst.dashboardURL)} target="_blank" rel="noreferrer">Open {data.instance} dashboard <Icons.ext /></a>}
         </div>
       </aside>
     </>

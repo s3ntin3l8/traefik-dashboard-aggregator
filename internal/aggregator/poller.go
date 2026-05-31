@@ -4,10 +4,11 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/s3ntin3l8/traefik-viewer/internal/config"
-	"github.com/s3ntin3l8/traefik-viewer/internal/traefik"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/traefik"
 )
 
 // Notifier is called (with the fresh snapshot already in the store) whenever a
@@ -23,6 +24,7 @@ type Poller struct {
 	interval time.Duration
 	notify   Notifier
 	log      *slog.Logger
+	polling  atomic.Bool
 }
 
 // NewPoller wires clients for each configured instance.
@@ -56,6 +58,14 @@ func (p *Poller) Run(ctx context.Context) {
 }
 
 func (p *Poller) pollOnce(ctx context.Context) {
+	// Skip this tick if the previous poll is still running (a slow/unreachable
+	// node taking longer than the interval), so polls can't pile up.
+	if !p.polling.CompareAndSwap(false, true) {
+		p.log.Warn("poll still in progress, skipping tick")
+		return
+	}
+	defer p.polling.Store(false)
+
 	results := make([]traefik.InstanceResult, len(p.clients))
 	durations := make(map[string]time.Duration, len(p.clients))
 	var mu sync.Mutex

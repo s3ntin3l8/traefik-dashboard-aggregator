@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/s3ntin3l8/traefik-viewer/internal/model"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/model"
 )
 
 // InstanceResult is one node's contribution to the aggregate snapshot.
@@ -207,26 +207,33 @@ func (c *Client) routers(ctx context.Context, path string) ([]model.Router, erro
 		}
 		host := hostFromRule(r.Rule)
 		url := ""
-		if host != "" && r.TLS != nil {
-			url = "https://" + host
+		resolver := ""
+		if r.TLS != nil {
+			if v, ok := r.TLS["certResolver"].(string); ok {
+				resolver = v
+			}
+			if host != "" {
+				url = "https://" + host
+			}
 		} else if host != "" {
 			url = "http://" + host
 		}
 		out = append(out, model.Router{
-			ID:          c.name + ":" + r.Name,
-			Name:        r.Name,
-			ShortName:   shortName(r.Name),
-			Rule:        r.Rule,
-			Host:        host,
-			Service:     r.Service,
-			Middlewares: mws,
-			EntryPoints: eps,
-			TLS:         r.TLS != nil,
-			Provider:    providerOf(r.Name, r.Provider),
-			Instance:    c.name,
-			Status:      r.Status,
-			Priority:    r.Priority,
-			URL:         url,
+			ID:           c.name + ":" + r.Name,
+			Name:         r.Name,
+			ShortName:    shortName(r.Name),
+			Rule:         r.Rule,
+			Host:         host,
+			Service:      r.Service,
+			Middlewares:  mws,
+			EntryPoints:  eps,
+			TLS:          r.TLS != nil,
+			CertResolver: resolver,
+			Provider:     providerOf(r.Name, r.Provider),
+			Instance:     c.name,
+			Status:       r.Status,
+			Priority:     r.Priority,
+			URL:          url,
 		})
 	}
 	return out, nil

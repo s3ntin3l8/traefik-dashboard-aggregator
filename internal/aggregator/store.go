@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/s3ntin3l8/traefik-viewer/internal/config"
-	"github.com/s3ntin3l8/traefik-viewer/internal/model"
-	"github.com/s3ntin3l8/traefik-viewer/internal/traefik"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/model"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/traefik"
 )
 
 // Store holds the latest aggregated snapshot plus per-instance last-good data,

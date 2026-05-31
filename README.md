@@ -119,8 +119,29 @@ view). Other views work on any v3.
 - `GET /` — the embedded SPA
 - `GET /api/snapshot` — full merged snapshot (JSON)
 - `GET /api/events` — SSE stream (snapshot on connect + on every change)
-- `GET /api/logs/query` · `GET /api/logs/tail` — Loki proxy (when configured)
+- `GET /api/logs/query` · `GET /api/logs/tail` — Loki proxy (when configured;
+  accepts an optional validated `?instance=` filter, never raw LogQL)
 - `GET /healthz` — liveness
+
+## Security
+
+- **No built-in authentication.** Every endpoint (including `/api/snapshot`,
+  which exposes each node's LAN IP, hostnames, and certificate metadata) is
+  served unauthenticated. **You must put traefik-viewer behind an authenticating
+  reverse proxy / SSO** — this is the only access control. Don't expose it
+  directly to an untrusted network.
+- **Loki proxy is scoped.** The Logs view never sends raw LogQL. The stream
+  selector is built server-side from `loki.labelMapping`; the client may only
+  narrow it to a single, allowlist-validated instance name. So a viewer cannot
+  read arbitrary Loki streams via the server's Loki credentials. Time windows
+  (≤ 7 days) and result counts (≤ 5000) are clamped.
+- **Credentialed clients refuse cross-host redirects.** The Loki and Traefik
+  HTTP clients send basic auth; they will not follow a redirect to a different
+  host, so credentials can't be replayed to an attacker-chosen destination.
+- **Response hardening.** All responses carry `X-Content-Type-Options`,
+  `X-Frame-Options: DENY`, `Referrer-Policy`, and a Content-Security-Policy.
+- **Secrets** stay out of `config.yaml` via `${VAR}` env references; the runtime
+  image is distroless and runs as a non-root user.
 
 ## CI/CD
 
@@ -155,4 +176,4 @@ cd web && npm install && npm run dev
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

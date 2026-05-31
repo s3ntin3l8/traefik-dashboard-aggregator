@@ -11,7 +11,9 @@ export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Sn
   const [fStatus, setFStatus] = useState<string | null>(null);
   const [sel, setSel] = useState<CertRowData | null>(null);
 
-  const now = Date.now();
+  // Stable per snapshot so the memos below actually cache between renders
+  // (a fresh Date.now() each render would invalidate them every time).
+  const now = useMemo(() => Date.now(), [snapshot]);
   const rows = useMemo<CertRowData[]>(() => {
     let cs = snapshot.certificates || [];
     if (fInstance) cs = cs.filter((c) => c.instance === fInstance);
@@ -76,11 +78,12 @@ export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Sn
         <table className="dtable cert-table">
           <thead>
             <tr>
+              <th style={{ width: 26 }}></th>
               <SortHead col="domain" label="Domain" sort={sort} setSort={setSort} />
               <th>SANs</th>
-              <SortHead col="notAfter" label="Expires" sort={sort} setSort={setSort} />
               <th>Resolver</th>
               <th>Issuer</th>
+              <SortHead col="notAfter" label="Expires" sort={sort} setSort={setSort} />
               <SortHead col="instance" label="Node" sort={sort} setSort={setSort} />
             </tr>
           </thead>
@@ -105,16 +108,17 @@ function CertRow({ c, snapshot, onSelect }: { c: CertRowData; snapshot: Snapshot
   const sans = c.sans || [];
   return (
     <tr onClick={onSelect} className="crow">
+      <td><span className={`sdot s-${k}`}></span></td>
       <td><span className="cert-domain">{c.wildcard && <span className="wild">✲</span>}{c.domain}</span></td>
       <td className="faint">{sans.length} SAN{sans.length !== 1 ? "s" : ""}</td>
+      <td><span className="pill-soft">{c.resolver || "—"}</span></td>
+      <td className="faint">{c.issuer} {c.issuerCN}</td>
       <td>
         <div className="exp-cell">
           <span className={`exp-days ${k}`}>{c.days < 0 ? `expired ${-c.days}d ago` : `${c.days}d`}</span>
           <div className="exp-bar"><div className={`exp-fill f-${k}`} style={{ width: pct + "%" }}></div></div>
         </div>
       </td>
-      <td><span className="pill-soft">{c.resolver || "—"}</span></td>
-      <td className="faint">{c.issuer} {c.issuerCN}</td>
       <td><InstanceTag name={c.instance} snapshot={snapshot} /></td>
     </tr>
   );

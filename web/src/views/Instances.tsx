@@ -1,6 +1,6 @@
 // Instances health panel. Ported from tv-overview.jsx InstancesPanel.
 import type { Snapshot } from "../lib/types";
-import { Icons, Badge, statusKind, timeAgo } from "../components/ui";
+import { Icons, Badge, statusKind, timeAgo, safeHref } from "../components/ui";
 
 export function InstancesPanel({ snapshot }: { snapshot: Snapshot }) {
   return (
@@ -24,7 +24,7 @@ export function InstancesPanel({ snapshot }: { snapshot: Snapshot }) {
                 <div className="hcard-meta" style={{ marginTop: 6 }}>
                   <span>{inst.ip}</span><span>{inst.version}</span>
                 </div>
-                {inst.dashboardURL && <a className="dlink" style={{ marginTop: 8 }} href={inst.dashboardURL} target="_blank" rel="noreferrer">Open dashboard <Icons.ext /></a>}
+                {safeHref(inst.dashboardURL) && <a className="dlink" style={{ marginTop: 8 }} href={safeHref(inst.dashboardURL)} target="_blank" rel="noreferrer">Open dashboard <Icons.ext /></a>}
               </div>
             </div>
             <div className="inst-body">

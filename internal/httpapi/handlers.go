@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/s3ntin3l8/traefik-viewer/internal/loki"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/loki"
 )
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -27,6 +27,11 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 // handleEvents streams the snapshot over SSE: once on connect, then on every
 // change, with periodic heartbeats so proxies don't drop the idle connection.
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	if !s.sseSlot.acquire() {
+		http.Error(w, "too many streaming clients", http.StatusServiceUnavailable)
+		return
+	}
+	defer s.sseSlot.release()
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -78,9 +83,30 @@ func (s *Server) requireLoki(w http.ResponseWriter) bool {
 	return true
 }
 
-// handleLogsQuery proxies a Loki query_range over a time window.
+// maxLogWindow bounds how much history a single logs query may span.
+const maxLogWindow = 7 * 24 * time.Hour
+
+// logInstance reads and validates the optional ?instance= filter. It returns
+// (value, true) when usable, or ("", false) when a non-empty value is invalid
+// (the caller has already written a 400). An empty value is valid (all streams).
+func logInstance(w http.ResponseWriter, r *http.Request) (string, bool) {
+	inst := r.URL.Query().Get("instance")
+	if inst != "" && !validInstanceName(inst) {
+		http.Error(w, `{"error":"invalid instance"}`, http.StatusBadRequest)
+		return "", false
+	}
+	return inst, true
+}
+
+// handleLogsQuery proxies a Loki query_range over a time window. The stream
+// selector is built server-side; the client may only narrow it to a validated
+// instance, never supply raw LogQL.
 func (s *Server) handleLogsQuery(w http.ResponseWriter, r *http.Request) {
 	if !s.requireLoki(w) {
+		return
+	}
+	inst, ok := logInstance(w, r)
+	if !ok {
 		return
 	}
 	q := r.URL.Query()
@@ -97,12 +123,13 @@ func (s *Server) handleLogsQuery(w http.ResponseWriter, r *http.Request) {
 			end = time.UnixMilli(ms)
 		}
 	}
+	start, end = clampWindow(start, end, maxLogWindow)
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	entries, err := s.loki.QueryRange(ctx, loki.QueryParams{
-		Query: q.Get("query"), Start: start, End: end, Limit: limit,
+		Instance: inst, Start: start, End: end, Limit: limit,
 	})
 	if err != nil {
 		s.log.Warn("loki query failed", "err", err)
@@ -118,6 +145,15 @@ func (s *Server) handleLogsTail(w http.ResponseWriter, r *http.Request) {
 	if !s.requireLoki(w) {
 		return
 	}
+	inst, ok := logInstance(w, r)
+	if !ok {
+		return
+	}
+	if !s.sseSlot.acquire() {
+		http.Error(w, "too many streaming clients", http.StatusServiceUnavailable)
+		return
+	}
+	defer s.sseSlot.release()
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -129,7 +165,6 @@ func (s *Server) handleLogsTail(w http.ResponseWriter, r *http.Request) {
 	h.Set("Connection", "keep-alive")
 	h.Set("X-Accel-Buffering", "no")
 
-	query := r.URL.Query().Get("query")
 	since := time.Now().Add(-1 * time.Minute)
 	t := time.NewTicker(3 * time.Second)
 	defer t.Stop()
@@ -141,9 +176,11 @@ func (s *Server) handleLogsTail(w http.ResponseWriter, r *http.Request) {
 		case <-t.C:
 			now := time.Now()
 			qctx, cancel := context.WithTimeout(ctx, 8*time.Second)
-			entries, err := s.loki.QueryRange(qctx, loki.QueryParams{Query: query, Start: since, End: now, Limit: 200})
+			entries, err := s.loki.QueryRange(qctx, loki.QueryParams{Instance: inst, Start: since, End: now, Limit: 200})
 			cancel()
-			since = now
+			// BUG-1: only advance the cursor on success, else a transient
+			// Loki error would skip this window's lines once Loki recovers.
+			since = advanceSince(since, now, err)
 			if err != nil {
 				continue
 			}

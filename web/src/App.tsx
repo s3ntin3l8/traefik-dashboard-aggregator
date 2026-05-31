@@ -81,20 +81,20 @@ export function App() {
   }
 
   const counts: Record<string, number | null> = {
-    http_routers: snapshot.httpRouters.length,
-    http_services: snapshot.httpServices.length,
-    middlewares: snapshot.middlewares.filter((m) => m.usedBy > 0).length,
-    tcp_routers: snapshot.tcpRouters.length,
-    tcp_services: snapshot.tcpServices.length,
-    tcp_middlewares: snapshot.tcpMiddlewares.length,
-    udp_routers: snapshot.udpRouters.length,
-    udp_services: snapshot.udpServices.length,
-    certificates: snapshot.certificates.length,
-    instances: snapshot.instances.length,
+    http_routers: (snapshot.httpRouters || []).length,
+    http_services: (snapshot.httpServices || []).length,
+    middlewares: (snapshot.middlewares || []).filter((m) => m.usedBy > 0).length,
+    tcp_routers: (snapshot.tcpRouters || []).length,
+    tcp_services: (snapshot.tcpServices || []).length,
+    tcp_middlewares: (snapshot.tcpMiddlewares || []).length,
+    udp_routers: (snapshot.udpRouters || []).length,
+    udp_services: (snapshot.udpServices || []).length,
+    certificates: (snapshot.certificates || []).length,
+    instances: (snapshot.instances || []).length,
   };
 
   const isHttpTable = ["http_routers", "http_services", "middlewares"].includes(tab);
-  const showNodeChips = isHttpTable || ["tcp_routers", "tcp_services", "tcp_middlewares", "udp_routers", "udp_services", "certificates"].includes(tab);
+  const showNodeChips = isHttpTable || ["tcp_routers", "tcp_services", "tcp_middlewares", "udp_routers", "udp_services", "certificates", "logs"].includes(tab);
   const unreachable = snapshot.instances.filter((i) => i.status === "unreachable");
   const title = (NAV.find((n) => n.id === tab) || {}).title || "";
 
@@ -161,8 +161,8 @@ export function App() {
         </div>
 
         <div className="content">
-          {tab === "overview" && <Overview snapshot={snapshot} dir={t.dir} goInstance={goInstance} onSelect={setSel} openTab={setTab} />}
-          {tab === "logs" && <LogsView snapshot={snapshot} globalSearch={search} />}
+          {tab === "overview" && <Overview snapshot={snapshot} dir={t.dir} goInstance={goInstance} onSelect={setSel} openTab={(t, inst) => { setTab(t); if (inst) setFInstance(inst); }} />}
+          {tab === "logs" && <LogsView snapshot={snapshot} globalSearch={search} fInstance={fInstance} />}
           {tab === "tcp_routers" && <ProtocolView proto="tcp" kind="routers" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}
           {tab === "tcp_services" && <ProtocolView proto="tcp" kind="services" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}
           {tab === "tcp_middlewares" && <ProtocolView proto="tcp" kind="middlewares" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}

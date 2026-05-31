@@ -1,17 +1,16 @@
 // Logs view: histogram, live tail, filters, detail drawer. Source: Loki.
 // Ported from tv-logs.jsx; the mock generator is replaced by the backend
 // /api/logs/query (window) + /api/logs/tail (SSE) endpoints.
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { Snapshot, LogEntry } from "../lib/types";
 import { Icons } from "../components/ui";
 import { fetchLogs, fetchFeatures } from "../lib/sse";
 
-export function LogsView({ snapshot, globalSearch }: { snapshot: Snapshot; globalSearch: string }) {
+export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snapshot; globalSearch: string; fInstance: string | null }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [live, setLive] = useState(true);
   const [level, setLevel] = useState<string | null>(null);
   const [kind, setKind] = useState<string | null>(null);
-  const [node, setNode] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState<LogEntry | null>(null);
   const [range, setRange] = useState(30 * 60 * 1000);
@@ -19,58 +18,93 @@ export function LogsView({ snapshot, globalSearch }: { snapshot: Snapshot; globa
   const [lokiEnabled, setLokiEnabled] = useState<boolean | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // Use a ref for 'now' to avoid constant re-renders from advancing time,
+  // but still allow it to refresh when needed.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!live || zoom) return;
+    const t = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(t);
+  }, [live, zoom]);
+
   useEffect(() => {
     fetchFeatures().then((f) => setLokiEnabled(f.lokiEnabled));
   }, []);
 
-  const now = Date.now();
   const winStart = zoom ? zoom.start : now - range;
   const winEnd = zoom ? zoom.end : now;
 
-  // load the selected window whenever range/zoom changes
+  // load the selected window whenever range/zoom/instance changes. The backend
+  // builds the Loki selector; we only pass the (optional) instance filter.
   useEffect(() => {
     if (!lokiEnabled) return;
     let cancelled = false;
-    fetchLogs({ startMs: zoom ? zoom.start : Date.now() - range, endMs: zoom ? zoom.end : Date.now(), limit: 1000 })
+    fetchLogs({
+      instance: fInstance,
+      startMs: zoom ? zoom.start : Date.now() - range,
+      endMs: zoom ? zoom.end : Date.now(),
+      limit: 1000
+    })
       .then((rows) => !cancelled && setLogs(rows))
       .catch((e) => !cancelled && setErr(String(e)));
     return () => { cancelled = true; };
-  }, [range, zoom, lokiEnabled]);
+  }, [range, zoom, lokiEnabled, fInstance]);
 
   // live tail via SSE
   useEffect(() => {
     if (!lokiEnabled || !live || zoom) return;
-    const es = new EventSource("/api/logs/tail");
+    const url = fInstance
+      ? `/api/logs/tail?instance=${encodeURIComponent(fInstance)}`
+      : `/api/logs/tail`;
+    const es = new EventSource(url);
     es.addEventListener("log", (e) => {
       try {
         const entry = JSON.parse((e as MessageEvent).data) as LogEntry;
-        setLogs((prev) => [entry, ...prev].slice(0, 1500));
+        setLogs((prev) => {
+          // avoid duplicates if the tail overlaps with the initial fetch
+          if (prev.some(p => p.id === entry.id)) return prev;
+          return [entry, ...prev].slice(0, 2000);
+        });
       } catch { /* ignore */ }
     });
     return () => es.close();
-  }, [live, zoom, lokiEnabled]);
+  }, [live, zoom, lokiEnabled, fInstance]);
 
   const filtered = useMemo(() => {
     const gq = (globalSearch || "").trim().toLowerCase();
     const lq = (q || "").trim().toLowerCase();
     return logs.filter((l) => {
-      if (l.ts < winStart || l.ts > winEnd) return false;
+      // Level filter
       if (level && l.level !== level) return false;
+      // Kind filter (access vs system)
       if (kind && l.kind !== kind) return false;
-      if (node && l.instance !== node) return false;
-      if (lq && !logText(l).toLowerCase().includes(lq)) return false;
-      if (gq && !logText(l).toLowerCase().includes(gq)) return false;
+      // Instance filter (handled by backend too, but for tail consistency)
+      if (fInstance && l.instance !== fInstance) return false;
+      // Search filters
+      const txt = logText(l).toLowerCase();
+      if (lq && !txt.includes(lq)) return false;
+      if (gq && !txt.includes(gq)) return false;
+      // Time window filter
+      if (l.ts < winStart || l.ts > winEnd) return false;
       return true;
     });
-  }, [logs, level, kind, node, q, globalSearch, winStart, winEnd]);
+  }, [logs, level, kind, fInstance, q, globalSearch, winStart, winEnd]);
 
   const counts = useMemo(() => {
     const m: Record<string, number> = { info: 0, warning: 0, error: 0 };
-    filtered.forEach((l) => (m[l.level] = (m[l.level] || 0) + 1));
+    const gq = (globalSearch || "").trim().toLowerCase();
+    const lq = (q || "").trim().toLowerCase();
+    logs.forEach((l) => {
+      if (l.ts < winStart || l.ts > winEnd) return;
+      if (kind && l.kind !== kind) return;
+      if (fInstance && l.instance !== fInstance) return;
+      const txt = logText(l).toLowerCase();
+      if (lq && !txt.includes(lq)) return;
+      if (gq && !txt.includes(gq)) return;
+      m[l.level] = (m[l.level] || 0) + 1;
+    });
     return m;
-  }, [filtered]);
-
-  const nodes = snapshot.instances.map((i) => i.name);
+  }, [logs, kind, fInstance, q, globalSearch, winStart, winEnd]);
 
   if (lokiEnabled === false) {
     return (
@@ -89,11 +123,6 @@ export function LogsView({ snapshot, globalSearch }: { snapshot: Snapshot; globa
           <div className="page-desc">via Loki · {filtered.length} lines · {live && !zoom ? "live" : "paused"}{err ? " · error" : ""}</div>
         </div>
         <div className="logs-actions">
-          <div className="range-seg">
-            {([["15m", 9e5], ["1h", 36e5], ["6h", 216e5], ["24h", 864e5]] as [string, number][]).map(([lbl, ms]) => (
-              <button key={lbl} className={range === ms && !zoom ? "on" : ""} onClick={() => { setRange(ms); setZoom(null); }}>{lbl}</button>
-            ))}
-          </div>
           <button className={`live-toggle ${live && !zoom ? "on" : ""}`} onClick={() => { setLive(!live); if (zoom) setZoom(null); }}>
             <span className="live-dot"></span>{live && !zoom ? "Live tail" : "Paused"}
           </button>
@@ -102,33 +131,40 @@ export function LogsView({ snapshot, globalSearch }: { snapshot: Snapshot; globa
 
       <LogHistogram logs={filtered} winStart={winStart} winEnd={winEnd} onZoom={setZoom} zoom={zoom} />
 
-      <div className="filter-row logs-filters">
-        <div className="logql">
-          <span className="logql-brace">{`{`}</span>job=<span className="logql-val">"traefik"</span><span className="logql-brace">{`}`}</span>
-          <input className="logql-input" placeholder="|= filter expression…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="logs-filters-area">
+        <div className="filter-row">
+          <div className="logql" style={{ width: "100%", maxWidth: "none" }}>
+            <span className="logql-brace">{`{`}</span>job=<span className="logql-val">"docker"</span>, container=<span className="logql-val">"traefik"</span>{fInstance && <>, instance=<span className="logql-val">"{fInstance}"</span></>}<span className="logql-brace">{`}`}</span>
+            <input className="logql-input" placeholder="|= filter expression…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <span className="src-tag">via Loki</span>
+          </div>
         </div>
-        <div className="chips">
-          {["info", "warning", "error"].map((lv) => (
-            <button key={lv} className={`chip ${level === lv ? "on" : ""}`} onClick={() => setLevel(level === lv ? null : lv)}>
-              <span className={`sdot s-${lv === "info" ? "ok" : lv === "warning" ? "warn" : "down"}`}></span>{lv} <b>{counts[lv] || 0}</b>
-            </button>
-          ))}
-        </div>
-        <div className="seg kind-seg">
-          {([["all", null], ["access", "access"], ["system", "system"]] as [string, string | null][]).map(([lbl, v]) => (
-            <button key={lbl} className={kind === v ? "on" : ""} onClick={() => setKind(v)}>{lbl}</button>
-          ))}
-        </div>
-        <div className="chips">
-          {nodes.map((n) => (
-            <button key={n} className={`chip ${node === n ? "on" : ""}`} onClick={() => setNode(node === n ? null : n)}>{n.replace("pve-", "")}</button>
-          ))}
+        <div className="filter-row" style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="row" style={{ gap: 16 }}>
+            <div className="chips">
+              {["info", "warning", "error"].map((lv) => (
+                <button key={lv} className={`chip ${level === lv ? "on" : ""}`} onClick={() => setLevel(level === lv ? null : lv)}>
+                  <span className={`sdot s-${lv === "info" ? "ok" : lv === "warning" ? "warn" : "down"}`}></span>{lv} <b>{counts[lv] || 0}</b>
+                </button>
+              ))}
+            </div>
+            <div className="seg kind-seg">
+              {([["all", null], ["access", "access"], ["system", "system"]] as [string, string | null][]).map(([lbl, v]) => (
+                <button key={lbl} className={kind === v ? "on" : ""} onClick={() => setKind(v)}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+          <div className="range-seg seg">
+            {([["15m", 9e5], ["1h", 36e5], ["6h", 216e5], ["24h", 864e5]] as [string, number][]).map(([lbl, ms]) => (
+              <button key={lbl} className={range === ms && !zoom ? "on" : ""} onClick={() => { setRange(ms); setZoom(null); }}>{lbl}</button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="log-stream">
         {filtered.length === 0 && <div className="empty-row">No log lines match.</div>}
-        {filtered.slice(0, 300).map((l) => <LogLine key={l.id} l={l} onClick={() => setSel(l)} />)}
+        {filtered.slice(0, 500).map((l) => <LogLine key={l.id} l={l} onClick={() => setSel(l)} />)}
       </div>
 
       {sel && <LogDrawer log={sel} onClose={() => setSel(null)} />}
@@ -137,7 +173,7 @@ export function LogsView({ snapshot, globalSearch }: { snapshot: Snapshot; globa
 }
 
 function logText(l: LogEntry): string {
-  if (l.kind === "access") return `${l.method} ${l.path} ${l.status} ${l.host} ${l.clientIP} ${l.app}`;
+  if (l.kind === "access") return `${l.method} ${l.path} ${l.status} ${l.host} ${l.clientIP} ${l.app} ${l.router} ${l.service}`;
   return `${l.msg} ${l.app} ${JSON.stringify(l.fields || {})}`;
 }
 
@@ -160,8 +196,15 @@ function LogHistogram({ logs, winStart, winEnd, onZoom, zoom }: { logs: LogEntry
   return (
     <div className="panel histo-panel">
       <div className="histo-head">
-        <span className="muted">{zoom ? "zoomed" : "volume"} · {logs.length} lines</span>
-        {zoom && <button className="zoom-out" onClick={() => onZoom(null)}>← zoom out</button>}
+        <div className="row" style={{ gap: 10 }}>
+          <span className="muted">{zoom ? "zoomed" : "volume"} · {logs.length} lines{!zoom && <span className="faint"> · click a bar to zoom</span>}</span>
+          {zoom && <button className="zoom-out" onClick={() => onZoom(null)}>← zoom out</button>}
+        </div>
+        <div className="row" style={{ gap: 14 }}>
+          <span className="topo-leg"><span className="sdot s-down"></span>error</span>
+          <span className="topo-leg"><span className="sdot s-warn"></span>warn</span>
+          <span className="topo-leg"><span className="sdot" style={{ background: "color-mix(in oklab, var(--accent) 55%, var(--text-faint))" }}></span>info</span>
+        </div>
       </div>
       <div className="histo">
         {buckets.map((b, i) => {
@@ -227,7 +270,7 @@ function LogDrawer({ log, onClose }: { log: LogEntry; onClose: () => void }) {
             <div className="kv" key={k}><span>{k}</span><span className="mono">{String(v)}</span></div>
           ))}
           <div className="drawer-section">Loki</div>
-          <div className="kv"><span>Selector</span><span className="mono">{`{job="traefik", instance="${log.instance}"}`}</span></div>
+          <div className="kv"><span>Selector</span><span className="mono">{`{job="docker", container="traefik", instance="${log.instance}"}`}</span></div>
         </div>
       </div>
     </div>
