@@ -284,6 +284,7 @@ function InstanceDetail({ i, snapshot }: { i: any; snapshot: Snapshot }) {
       <div className="kv"><span>URL</span><span className="mono">{i.url}</span></div>
       <div className="kv"><span>Node</span><NodeLine snapshot={snapshot} name={i.name} /></div>
       {i.error && <div className="kv"><span>Error</span><span className="err-text">{i.error}</span></div>}
+      {safeHref(i.dashboardURL) && <a className="dlink" style={{ marginTop: 14 }} href={safeHref(i.dashboardURL)} target="_blank" rel="noreferrer">Open dashboard <Icons.ext /></a>}
     </>
   );
 }
