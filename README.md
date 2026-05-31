@@ -22,6 +22,22 @@ Overview (health hero + live topology) · HTTP / TCP / UDP routers, services &
 middlewares (sortable, searchable, with a detail drawer) · TLS Certificates
 (expiry tracking) · Logs (via Loki) · Instances (per-node health) · Settings.
 
+## Screenshots
+
+> Shown with demo data — in practice the app aggregates live data from your own
+> Traefik instances.
+
+**Overview** — per-node health, routes needing attention, and a live
+request-flow topology (gateway → nodes → router constellation):
+
+![Overview](docs/screenshots/overview.png)
+
+| Certificates — expiry tracking | Logs — via Loki |
+| :---: | :---: |
+| ![Certificates](docs/screenshots/certificates.png) | ![Logs](docs/screenshots/logs.png) |
+| **Sortable, searchable tables** | **Terminal style + light theme** |
+| ![HTTP services table](docs/screenshots/tables.png) | ![Terminal theme](docs/screenshots/overview-terminal.png) |
+
 ## Quick start
 
 1. **Configure.** Copy the example and edit it:
