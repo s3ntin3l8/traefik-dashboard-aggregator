@@ -162,11 +162,11 @@ func (c *Client) Scrape(ctx context.Context) InstanceResult {
 	linkRouterServiceStatus(res.HTTPRouters, res.HTTPServices)
 	linkRouterServiceStatus(res.TCPRouters, res.TCPServices)
 
-	// Flag routers whose certResolver doesn't match any known resolver derived
-	// from the certificates endpoint. Skip the check when no resolver names are
-	// available (fresh node, all certs manually imported) to avoid false positives.
-	linkRouterCertResolvers(res.HTTPRouters, res.Certificates)
-	linkRouterCertResolvers(res.TCPRouters, res.Certificates)
+	// Flag routers whose certResolver is set but no certificate covers their
+	// host. Skip the check when the instance has no certs at all (fresh node)
+	// to avoid false positives.
+	linkRouterTLSCoverage(res.HTTPRouters, res.Certificates)
+	linkRouterTLSCoverage(res.TCPRouters, res.Certificates)
 	return res
 }
 
@@ -196,30 +196,44 @@ func linkRouterServiceStatus(routers []model.Router, services []model.Service) {
 	}
 }
 
-// linkRouterCertResolvers flags routers whose certResolver is not present in
-// any certificate issued by this instance. When no certificates carry a
-// resolver name (manually-managed certs, or a fresh node) the check is skipped
-// to avoid false positives.
-func linkRouterCertResolvers(routers []model.Router, certs []model.Certificate) {
-	known := make(map[string]bool)
-	for _, c := range certs {
-		if c.Resolver != "" {
-			known[c.Resolver] = true
-		}
-	}
-	if len(known) == 0 {
+// linkRouterTLSCoverage flags routers that want automatic cert management
+// (certResolver set) but have no certificate covering their host. Skipped
+// when the instance has no certs at all (fresh node) to avoid false positives.
+// Wildcard certs (*.example.test) are matched against subdomains.
+func linkRouterTLSCoverage(routers []model.Router, certs []model.Certificate) {
+	if len(certs) == 0 {
 		return
 	}
+	covered := make(map[string]bool, len(certs)*2)
+	for _, c := range certs {
+		covered[strings.ToLower(c.Domain)] = true
+		for _, san := range c.SANs {
+			covered[strings.ToLower(san)] = true
+		}
+	}
 	for i := range routers {
-		if routers[i].CertResolver == "" || known[routers[i].CertResolver] {
+		if routers[i].CertResolver == "" || routers[i].Host == "" {
+			continue
+		}
+		host := strings.ToLower(routers[i].Host)
+		if covered[host] || covered[wildcardDomain(host)] {
 			continue
 		}
 		if routers[i].Status == "enabled" {
 			routers[i].Status = "warning"
 		}
 		routers[i].Errors = append(routers[i].Errors,
-			"router uses a nonexistent certificate resolver "+routers[i].CertResolver)
+			"no TLS certificate covering "+routers[i].Host+" (certResolver: "+routers[i].CertResolver+")")
 	}
+}
+
+// wildcardDomain returns the wildcard form of a hostname so that
+// "aerie.example.test" can be matched against a "*.example.test" cert SAN.
+func wildcardDomain(host string) string {
+	if i := strings.IndexByte(host, '.'); i >= 0 {
+		return "*" + host[i:]
+	}
+	return ""
 }
 
 func (c *Client) routers(ctx context.Context, path string) ([]model.Router, error) {

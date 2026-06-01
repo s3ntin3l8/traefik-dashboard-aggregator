@@ -89,11 +89,12 @@ func TestScrapeTransformsFixtures(t *testing.T) {
 				t.Errorf("grafana status = %q, want warning (downgraded)", r.Status)
 			}
 		case "aerie@docker":
+			// host aerie.other.test has no cert; certResolver set → warning
 			if r.Status != "warning" {
-				t.Errorf("aerie status = %q, want warning (certResolver cross-reference)", r.Status)
+				t.Errorf("aerie status = %q, want warning (no TLS cert for host)", r.Status)
 			}
 			if len(r.Errors) != 1 {
-				t.Errorf("aerie errors = %d, want 1 (unknown certResolver)", len(r.Errors))
+				t.Errorf("aerie errors = %d, want 1 (missing TLS cert)", len(r.Errors))
 			}
 		}
 	}

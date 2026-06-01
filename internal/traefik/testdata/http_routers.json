@@ -34,7 +34,7 @@
   {
     "entryPoints": ["websecure"],
     "service": "aerie@docker",
-    "rule": "Host(`aerie.example.test`)",
+    "rule": "Host(`aerie.other.test`)",
     "tls": {"certResolver": "le"},
     "status": "enabled",
     "name": "aerie@docker",
