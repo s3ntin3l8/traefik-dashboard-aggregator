@@ -109,7 +109,7 @@ export function App() {
   };
 
   const isHttpTable = ["http_routers", "http_services", "middlewares"].includes(tab);
-  const showNodeChips = isHttpTable || ["tcp_routers", "tcp_services", "tcp_middlewares", "udp_routers", "udp_services", "certificates", "logs"].includes(tab);
+  const showNodeChips = isHttpTable || ["overview", "tcp_routers", "tcp_services", "tcp_middlewares", "udp_routers", "udp_services", "certificates", "logs"].includes(tab);
   const unreachable = snapshot.instances.filter((i) => i.status === "unreachable");
   const title = (NAV.find((n) => n.id === tab) || {}).title || "";
 
@@ -182,7 +182,7 @@ export function App() {
         </div>
 
         <div className="content">
-          {tab === "overview" && <Overview snapshot={snapshot} dir={t.dir} goInstance={goInstance} onSelect={setSel} openTab={(t, inst) => { setTab(t); if (inst) setFInstance(inst); }} />}
+          {tab === "overview" && <Overview snapshot={snapshot} dir={t.dir} search={q} fInstance={fInstance} goInstance={goInstance} onSelect={setSel} openTab={(t, inst) => { setTab(t); if (inst) setFInstance(inst); }} />}
           {tab === "logs" && <LogsView snapshot={snapshot} globalSearch={search} fInstance={fInstance} />}
           {tab === "tcp_routers" && <ProtocolView proto="tcp" kind="routers" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}
           {tab === "tcp_services" && <ProtocolView proto="tcp" kind="services" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}
