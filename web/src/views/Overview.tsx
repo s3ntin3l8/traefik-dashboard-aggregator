@@ -5,11 +5,9 @@ import { Icons, statusKind, timeAgo } from "../components/ui";
 import { Topology } from "./Topology";
 import type { Sel } from "../lib/sel";
 
-export function Overview({ snapshot, dir, search, fInstance, goInstance, onSelect, openTab }: {
+export function Overview({ snapshot, dir, goInstance, onSelect, openTab }: {
   snapshot: Snapshot;
   dir: string;
-  search: string;
-  fInstance: string | null;
   goInstance: (name?: string) => void;
   onSelect: (s: Sel) => void;
   openTab: (tab: string, instance?: string) => void;
@@ -18,30 +16,6 @@ export function Overview({ snapshot, dir, search, fInstance, goInstance, onSelec
   const unreachable = insts.filter((i) => i.status === "unreachable").length;
   const probRouters = useMemo(() => (snapshot.httpRouters || []).filter((r) => r.status !== "enabled"), [snapshot]);
   const probServices = useMemo(() => (snapshot.httpServices || []).filter((s) => s.serversUp < s.serversTotal), [snapshot]);
-
-  const active = search !== "" || fInstance !== null;
-
-  const attnRouters = useMemo(() => {
-    if (!active) return probRouters;
-    return (snapshot.httpRouters || []).filter((r) => {
-      if (fInstance && r.instance !== fInstance) return false;
-      if (!search) return true;
-      return (
-        r.name.toLowerCase().includes(search) ||
-        (r.rule || "").toLowerCase().includes(search) ||
-        r.service.toLowerCase().includes(search) ||
-        r.instance.toLowerCase().includes(search)
-      );
-    });
-  }, [snapshot, search, fInstance, active, probRouters]);
-
-  const visibleInsts = useMemo(() => {
-    return insts.filter((i) => {
-      if (fInstance && i.name !== fInstance) return false;
-      if (search && !i.name.toLowerCase().includes(search)) return false;
-      return true;
-    });
-  }, [insts, search, fInstance]);
 
   const totalR = (snapshot.httpRouters || []).length;
   const totalS = (snapshot.httpServices || []).length;
@@ -81,20 +55,19 @@ export function Overview({ snapshot, dir, search, fInstance, goInstance, onSelec
           </div>
           <div className="panel-body">
             <div className="health-list">
-              {visibleInsts.map((i) => <InstanceHealthCard key={i.name} inst={i} onClick={() => goInstance(i.name)} onFilter={(tab) => openTab(tab, i.name)} />)}
-              {visibleInsts.length === 0 && <div className="empty-row">No matching instances</div>}
+              {insts.map((i) => <InstanceHealthCard key={i.name} inst={i} onClick={() => goInstance(i.name)} onFilter={(tab) => openTab(tab, i.name)} />)}
             </div>
           </div>
         </div>
 
         <div className="panel">
           <div className="panel-head">
-            <div className="panel-title">{active ? "Matching routers" : "Routes needing attention"}</div>
-            <span className="muted">{attnRouters.length}</span>
+            <div className="panel-title">Routes needing attention</div>
+            <span className="muted">{probRouters.length}</span>
           </div>
           <div className="prob-list">
-            {attnRouters.length === 0 && <div className="empty-row">{active ? "No matching routers" : "Everything healthy ✓"}</div>}
-            {attnRouters.slice(0, 10).map((r) => (
+            {probRouters.length === 0 && <div className="empty-row">Everything healthy ✓</div>}
+            {probRouters.slice(0, 10).map((r) => (
               <div className="prob-item" key={r.id} onClick={() => onSelect({ kind: "router", data: r })}>
                 <span className={`sdot s-${statusKind(r.status)}`}></span>
                 <span className="prob-name">{r.name}</span>
@@ -102,12 +75,6 @@ export function Overview({ snapshot, dir, search, fInstance, goInstance, onSelec
                 <Icons.chevright size={14} />
               </div>
             ))}
-            {attnRouters.length > 10 && (
-              <div className="prob-item prob-more">
-                <span className="muted">+{attnRouters.length - 10} more ·</span>
-                <button className="btn-ghost" style={{ padding: "0 4px" }} onClick={() => openTab("http_routers")}>View all in HTTP Routers</button>
-              </div>
-            )}
           </div>
         </div>
       </div>

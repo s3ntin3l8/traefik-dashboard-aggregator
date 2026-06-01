@@ -1,6 +1,6 @@
 // App shell: sidebar nav (grouped), topbar (search + node chips + live clock),
 // view routing, SSE-driven snapshot, and the shared detail drawer.
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSnapshot, fetchFeatures, fetchMe } from "./lib/sse";
 import type { Identity } from "./lib/sse";
 import { useTweaks } from "./lib/theme";
@@ -14,6 +14,7 @@ import { CertificatesView } from "./views/Certificates";
 import { LogsView } from "./views/Logs";
 import { InstancesPanel } from "./views/Instances";
 import { Settings } from "./views/Settings";
+import { SearchModal } from "./components/SearchModal";
 
 const NAV_GROUPS: { label?: string; items: { id: string; label: string; icon: string; title?: string }[] }[] = [
   { items: [{ id: "overview", label: "Overview", icon: "grid" }] },
@@ -51,6 +52,7 @@ export function App() {
   const [sel, setSel] = useState<Sel | null>(null);
   const [lokiEnabled, setLokiEnabled] = useState(false);
   const [me, setMe] = useState<Identity | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetchFeatures().then((f) => setLokiEnabled(f.lokiEnabled)); }, []);
@@ -76,6 +78,18 @@ export function App() {
   }, []);
 
   const goInstance = (name?: string) => { setTab("instances"); if (name) setFInstance(name); };
+
+  useEffect(() => { setModalVisible(search.trim().length > 0); }, [search]);
+
+  const handleModalNavigate = useCallback((targetTab: string, sel?: Sel) => {
+    setTab(targetTab);
+    if (sel) {
+      setSel(sel);
+      setSearch(""); // HTTP entities: clear search, drawer opens directly
+    } else {
+      setModalVisible(false); // TCP/UDP/Cert: keep search for inline filter on target tab
+    }
+  }, []);
 
   const q = search.trim().toLowerCase();
   const matchInst = (x: { instance: string }) => !fInstance || x.instance === fInstance;
@@ -109,7 +123,7 @@ export function App() {
   };
 
   const isHttpTable = ["http_routers", "http_services", "middlewares"].includes(tab);
-  const showNodeChips = isHttpTable || ["overview", "tcp_routers", "tcp_services", "tcp_middlewares", "udp_routers", "udp_services", "certificates", "logs"].includes(tab);
+  const showNodeChips = isHttpTable || ["tcp_routers", "tcp_services", "tcp_middlewares", "udp_routers", "udp_services", "certificates", "logs"].includes(tab);
   const unreachable = snapshot.instances.filter((i) => i.status === "unreachable");
   const title = (NAV.find((n) => n.id === tab) || {}).title || "";
 
@@ -160,10 +174,15 @@ export function App() {
 
       <main className="main">
         <div className="topbar">
-          <div className="search">
-            <Icons.search size={16} />
-            <input ref={searchRef} placeholder="Search routers, services, hosts, middlewares…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            {search ? <button className="search-clear" onClick={() => { setSearch(""); searchRef.current?.focus(); }}>×</button> : <span className="kbd">/</span>}
+          <div className="search-modal-anchor">
+            <div className="search">
+              <Icons.search size={16} />
+              <input ref={searchRef} placeholder="Search routers, services, hosts, middlewares…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              {search ? <button className="search-clear" onClick={() => { setSearch(""); searchRef.current?.focus(); }}>×</button> : <span className="kbd">/</span>}
+            </div>
+            {q.length > 0 && modalVisible && (
+              <SearchModal snapshot={snapshot} search={q} onNavigate={handleModalNavigate} onClose={() => setModalVisible(false)} />
+            )}
           </div>
           {showNodeChips && (
             <div className="chips">
@@ -182,7 +201,7 @@ export function App() {
         </div>
 
         <div className="content">
-          {tab === "overview" && <Overview snapshot={snapshot} dir={t.dir} search={q} fInstance={fInstance} goInstance={goInstance} onSelect={setSel} openTab={(t, inst) => { setTab(t); if (inst) setFInstance(inst); }} />}
+          {tab === "overview" && <Overview snapshot={snapshot} dir={t.dir} goInstance={goInstance} onSelect={setSel} openTab={(t, inst) => { setTab(t); if (inst) setFInstance(inst); }} />}
           {tab === "logs" && <LogsView snapshot={snapshot} globalSearch={search} fInstance={fInstance} />}
           {tab === "tcp_routers" && <ProtocolView proto="tcp" kind="routers" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}
           {tab === "tcp_services" && <ProtocolView proto="tcp" kind="services" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}

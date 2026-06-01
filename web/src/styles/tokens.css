@@ -217,11 +217,12 @@ button { font-family: inherit; cursor: pointer; }
 .content-wide { max-width: 1500px; margin: 0 auto; }
 
 /* search */
+.search-modal-anchor { position: relative; flex: 1; max-width: 520px; }
 .search {
   display: flex; align-items: center; gap: 9px;
   background: var(--panel-2); border: var(--border-style);
   border-radius: var(--radius); padding: 0 12px; height: 38px;
-  flex: 1; max-width: 520px; transition: border-color .15s, box-shadow .15s;
+  width: 100%; transition: border-color .15s, box-shadow .15s;
 }
 .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .search input {
@@ -239,6 +240,32 @@ button { font-family: inherit; cursor: pointer; }
   display: flex; align-items: center; transition: color .1s;
 }
 .search .search-clear:hover { color: var(--text); }
+
+/* search results modal */
+.search-modal-scrim { position: fixed; inset: 0; z-index: 49; }
+.search-modal {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  background: var(--panel); border: var(--border-style);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  z-index: 50; overflow: hidden; animation: fadeUp .15s ease;
+}
+.search-modal-group { border-bottom: var(--border-style); }
+.search-modal-group:last-child { border-bottom: none; }
+.search-modal-group-label {
+  font-size: 11px; font-weight: 600; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: .04em;
+  padding: 8px 14px 4px;
+}
+.search-modal-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px; cursor: pointer; transition: background .1s;
+}
+.search-modal-item:hover { background: var(--panel-2); }
+.search-modal-item-name { font-size: 13.5px; color: var(--text); }
+.search-modal-item-sub { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-modal-item-inst { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; margin-left: auto; padding-left: 8px; }
+.search-modal-more { padding: 5px 14px 8px; font-size: 12px; color: var(--text-faint); }
+.search-modal-empty { padding: 20px 14px; font-size: 13px; color: var(--text-dim); text-align: center; }
 
 /* live status pill */
 .live {
