@@ -13,7 +13,8 @@
     "keyType": "RSA",
     "keySize": 4096,
     "signatureAlgorithm": "SHA256-RSA",
-    "status": "enabled"
+    "status": "enabled",
+    "resolver": "le-prod"
   },
   {
     "name": "bbbb2222",
@@ -27,6 +28,7 @@
     "keyType": "ECDSA",
     "keySize": 256,
     "signatureAlgorithm": "ECDSA-SHA384",
-    "status": "enabled"
+    "status": "enabled",
+    "resolver": "le-prod"
   }
 ]

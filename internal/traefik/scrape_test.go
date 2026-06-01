@@ -90,10 +90,10 @@ func TestScrapeTransformsFixtures(t *testing.T) {
 			}
 		case "aerie@docker":
 			if r.Status != "warning" {
-				t.Errorf("aerie status = %q, want warning (error field present)", r.Status)
+				t.Errorf("aerie status = %q, want warning (certResolver cross-reference)", r.Status)
 			}
 			if len(r.Errors) != 1 {
-				t.Errorf("aerie errors = %d, want 1", len(r.Errors))
+				t.Errorf("aerie errors = %d, want 1 (unknown certResolver)", len(r.Errors))
 			}
 		}
 	}

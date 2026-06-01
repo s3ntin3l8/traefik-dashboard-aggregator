@@ -5,7 +5,7 @@
     "rule": "Host(`whoami.example.test`)",
     "middlewares": ["secure-headers@file"],
     "priority": 100,
-    "tls": {"certResolver": "le"},
+    "tls": {"certResolver": "le-prod"},
     "status": "enabled",
     "using": ["websecure"],
     "name": "whoami@docker",
@@ -37,7 +37,6 @@
     "rule": "Host(`aerie.example.test`)",
     "tls": {"certResolver": "le"},
     "status": "enabled",
-    "error": ["router uses a nonexistent certificate resolver le"],
     "name": "aerie@docker",
     "provider": "docker"
   }

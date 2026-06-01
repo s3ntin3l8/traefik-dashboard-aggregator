@@ -161,6 +161,12 @@ func (c *Client) Scrape(ctx context.Context) InstanceResult {
 	// in the router's displayed status (matches the design's vocabulary).
 	linkRouterServiceStatus(res.HTTPRouters, res.HTTPServices)
 	linkRouterServiceStatus(res.TCPRouters, res.TCPServices)
+
+	// Flag routers whose certResolver doesn't match any known resolver derived
+	// from the certificates endpoint. Skip the check when no resolver names are
+	// available (fresh node, all certs manually imported) to avoid false positives.
+	linkRouterCertResolvers(res.HTTPRouters, res.Certificates)
+	linkRouterCertResolvers(res.TCPRouters, res.Certificates)
 	return res
 }
 
@@ -187,6 +193,32 @@ func linkRouterServiceStatus(routers []model.Router, services []model.Service) {
 				routers[i].Status = "warning"
 			}
 		}
+	}
+}
+
+// linkRouterCertResolvers flags routers whose certResolver is not present in
+// any certificate issued by this instance. When no certificates carry a
+// resolver name (manually-managed certs, or a fresh node) the check is skipped
+// to avoid false positives.
+func linkRouterCertResolvers(routers []model.Router, certs []model.Certificate) {
+	known := make(map[string]bool)
+	for _, c := range certs {
+		if c.Resolver != "" {
+			known[c.Resolver] = true
+		}
+	}
+	if len(known) == 0 {
+		return
+	}
+	for i := range routers {
+		if routers[i].CertResolver == "" || known[routers[i].CertResolver] {
+			continue
+		}
+		if routers[i].Status == "enabled" {
+			routers[i].Status = "warning"
+		}
+		routers[i].Errors = append(routers[i].Errors,
+			"router uses a nonexistent certificate resolver "+routers[i].CertResolver)
 	}
 }
 
@@ -328,6 +360,7 @@ func (c *Client) certificates(ctx context.Context) ([]model.Certificate, error) 
 			Domain:    domain,
 			Wildcard:  strings.HasPrefix(domain, "*"),
 			SANs:      sans,
+			Resolver:  cert.Resolver,
 			Issuer:    cert.IssuerOrg,
 			IssuerCN:  cert.IssuerCN,
 			Serial:    cert.Serial,

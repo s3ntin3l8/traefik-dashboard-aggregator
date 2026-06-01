@@ -54,6 +54,7 @@ type rawCertificate struct {
 	KeyType    string   `json:"keyType"`
 	KeySize    int      `json:"keySize"`
 	Status     string   `json:"status"`
+	Resolver   string   `json:"resolver"`
 }
 
 type rawEntryPoint struct {
