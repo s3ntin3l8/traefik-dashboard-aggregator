@@ -218,6 +218,10 @@ func (c *Client) routers(ctx context.Context, path string) ([]model.Router, erro
 		} else if host != "" {
 			url = "http://" + host
 		}
+		status := r.Status
+		if status == "enabled" && len(r.Error) > 0 {
+			status = "warning"
+		}
 		out = append(out, model.Router{
 			ID:           c.name + ":" + r.Name,
 			Name:         r.Name,
@@ -231,7 +235,8 @@ func (c *Client) routers(ctx context.Context, path string) ([]model.Router, erro
 			CertResolver: resolver,
 			Provider:     providerOf(r.Name, r.Provider),
 			Instance:     c.name,
-			Status:       r.Status,
+			Status:       status,
+			Errors:       r.Error,
 			Priority:     r.Priority,
 			URL:          url,
 		})

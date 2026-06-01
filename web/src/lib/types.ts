@@ -27,6 +27,7 @@ export interface Router {
   provider: string;
   instance: string;
   status: RouterStatus;
+  errors?: string[];
   priority?: number;
   url?: string;
 }

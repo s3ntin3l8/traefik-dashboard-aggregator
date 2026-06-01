@@ -52,8 +52,8 @@ func TestScrapeTransformsFixtures(t *testing.T) {
 	if res.Version != "3.7.1" {
 		t.Errorf("version = %q, want 3.7.1", res.Version)
 	}
-	if len(res.HTTPRouters) != 3 {
-		t.Fatalf("routers = %d, want 3", len(res.HTTPRouters))
+	if len(res.HTTPRouters) != 4 {
+		t.Fatalf("routers = %d, want 4", len(res.HTTPRouters))
 	}
 	if len(res.HTTPServices) != 2 {
 		t.Fatalf("services = %d, want 2", len(res.HTTPServices))
@@ -87,6 +87,13 @@ func TestScrapeTransformsFixtures(t *testing.T) {
 			}
 			if r.Status != "warning" {
 				t.Errorf("grafana status = %q, want warning (downgraded)", r.Status)
+			}
+		case "aerie@docker":
+			if r.Status != "warning" {
+				t.Errorf("aerie status = %q, want warning (error field present)", r.Status)
+			}
+			if len(r.Errors) != 1 {
+				t.Errorf("aerie errors = %d, want 1", len(r.Errors))
 			}
 		}
 	}

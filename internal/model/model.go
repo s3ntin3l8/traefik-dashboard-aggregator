@@ -61,6 +61,7 @@ type Router struct {
 	Provider      string   `json:"provider"`
 	Instance      string   `json:"instance"`
 	Status        string   `json:"status"` // enabled | warning | error | disabled
+	Errors        []string `json:"errors,omitempty"`
 	Priority      int      `json:"priority,omitempty"`
 	URL           string   `json:"url,omitempty"`
 }

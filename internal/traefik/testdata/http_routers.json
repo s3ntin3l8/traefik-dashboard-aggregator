@@ -30,5 +30,15 @@
     "using": ["traefik"],
     "name": "api@internal",
     "provider": "internal"
+  },
+  {
+    "entryPoints": ["websecure"],
+    "service": "aerie@docker",
+    "rule": "Host(`aerie.example.test`)",
+    "tls": {"certResolver": "le"},
+    "status": "enabled",
+    "error": ["router uses a nonexistent certificate resolver le"],
+    "name": "aerie@docker",
+    "provider": "docker"
   }
 ]

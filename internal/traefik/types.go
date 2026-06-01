@@ -19,6 +19,7 @@ type rawRouter struct {
 	Middlewares []string       `json:"middlewares"`
 	TLS         map[string]any `json:"tls"`
 	Status      string         `json:"status"`
+	Error       []string       `json:"error"`
 	Name        string         `json:"name"`
 	Provider    string         `json:"provider"`
 }

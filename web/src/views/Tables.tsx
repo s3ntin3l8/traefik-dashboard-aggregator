@@ -196,6 +196,12 @@ function RouterDetail({ r, snapshot, onSelect }: { r: Router; snapshot: Snapshot
       <div className="kv"><span>Provider</span><span>{r.provider}</span></div>
       <div className="kv"><span>Node</span><NodeLine snapshot={snapshot} name={r.instance} /></div>
 
+      {(r.errors || []).length > 0 && (
+        <>
+          <div className="drawer-section">Configuration errors</div>
+          {r.errors!.map((e, i) => <div key={i} className="kv err-row"><span className="err-text">{e}</span></div>)}
+        </>
+      )}
       <div className="drawer-section">Request chain</div>
       <div className="chain">
         <div className="chain-step">
