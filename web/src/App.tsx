@@ -163,7 +163,7 @@ export function App() {
           <div className="search">
             <Icons.search size={16} />
             <input ref={searchRef} placeholder="Search routers, services, hosts, middlewares…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            {!search && <span className="kbd">/</span>}
+            {search ? <button className="search-clear" onClick={() => { setSearch(""); searchRef.current?.focus(); }}>×</button> : <span className="kbd">/</span>}
           </div>
           {showNodeChips && (
             <div className="chips">
