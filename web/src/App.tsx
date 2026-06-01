@@ -180,7 +180,7 @@ export function App() {
               <input ref={searchRef} placeholder="Search routers, services, hosts, middlewares…" value={search} onChange={(e) => setSearch(e.target.value)} />
               {search ? <button className="search-clear" onClick={() => { setSearch(""); searchRef.current?.focus(); }}>×</button> : <span className="kbd">/</span>}
             </div>
-            {q.length > 0 && modalVisible && (
+            {tab === "overview" && q.length > 0 && modalVisible && (
               <SearchModal snapshot={snapshot} search={q} onNavigate={handleModalNavigate} onClose={() => setModalVisible(false)} />
             )}
           </div>

@@ -243,7 +243,6 @@ button { font-family: inherit; cursor: pointer; }
 .search .search-clear:hover { color: var(--text); }
 
 /* search results modal */
-.search-modal-scrim { position: fixed; inset: 0; z-index: 49; }
 .search-modal {
   position: absolute; top: calc(100% + 6px); left: 0; right: 0;
   background: var(--panel); border: var(--border-style);

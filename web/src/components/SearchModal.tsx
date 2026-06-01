@@ -27,9 +27,13 @@ interface Group {
 
 export function SearchModal({ snapshot, search, onNavigate, onClose }: Props) {
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as Element).closest(".search-modal-anchor")) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
   }, [onClose]);
 
   const groups: Group[] = [];
@@ -144,7 +148,6 @@ export function SearchModal({ snapshot, search, onNavigate, onClose }: Props) {
 
   return (
     <>
-      <div className="search-modal-scrim" onClick={onClose} />
       <div className="search-modal">
         {groups.length === 0 && (
           <div className="search-modal-empty">No results for "{search}"</div>
