@@ -83,12 +83,8 @@ export function App() {
 
   const handleModalNavigate = useCallback((targetTab: string, sel?: Sel) => {
     setTab(targetTab);
-    if (sel) {
-      setSel(sel);
-      setSearch(""); // HTTP entities: clear search, drawer opens directly
-    } else {
-      setModalVisible(false); // TCP/UDP/Cert: keep search for inline filter on target tab
-    }
+    if (sel) setSel(sel);
+    else setModalVisible(false);
   }, []);
 
   const q = search.trim().toLowerCase();
