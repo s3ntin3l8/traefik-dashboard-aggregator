@@ -45,13 +45,26 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Precache all built assets: JS bundles, CSS, HTML, and static files.
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,woff}"],
-        // For navigation requests (page loads), serve cached index.html when offline.
-        // Denylist /api/* so SSE and API calls always hit the network.
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//],
+        // Activate the new SW immediately when installed (skip waiting for old
+        // tabs to close), then claim all existing clients so every open page
+        // switches to the new SW without a full close/reopen cycle.
+        skipWaiting: true,
+        clientsClaim: true,
+        // Precache JS bundles, CSS, and static assets — but NOT index.html.
+        // Excluding index.html ensures navigation requests always reach the
+        // network so the Authentik forward-auth proxy can redirect expired
+        // sessions to login instead of the browser serving a cached page.
+        globPatterns: ["**/*.{js,css,ico,png,svg,woff2,woff}"],
+        // vite-plugin-pwa always injects a NavigationRoute; deny everything so
+        // it never fires. All navigations fall through to the network and
+        // Authentik can handle session expiry correctly.
+        navigateFallbackDenylist: [/.*/],
         runtimeCaching: [
+          {
+            // API calls must always reach the backend — never serve from cache.
+            urlPattern: /^\/api\//,
+            handler: "NetworkOnly",
+          },
           {
             // Cache Google Fonts for one year (font URLs are content-addressed).
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,

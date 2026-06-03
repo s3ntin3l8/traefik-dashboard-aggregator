@@ -16,10 +16,13 @@ export function useSnapshot(): { snapshot: Snapshot | null; connected: boolean; 
   useEffect(() => {
     let cancelled = false;
 
-    // initial fetch so the UI paints fast even before the first SSE frame
-    fetch("/api/snapshot")
+    // initial fetch so the UI paints fast even before the first SSE frame.
+    // redirect:"manual" returns an opaque redirect instead of following a
+    // cross-origin 302 — this detects an expired Authentik session without
+    // triggering a CSP violation on the auth provider's URL.
+    fetch("/api/snapshot", { redirect: "manual" })
       .then((r) => {
-        if (r.status === 401) {
+        if (r.type === "opaqueredirect" || r.status === 401) {
           if (!cancelled) setAuthExpired(true);
           return null;
         }
