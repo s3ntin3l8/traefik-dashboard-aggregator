@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import type { Snapshot } from "../lib/types";
 import { statusKind, STATUS_LABEL } from "../lib/types";
+export { useIsMobile } from "../lib/mobile";
 
 export { statusKind, STATUS_LABEL };
 
@@ -60,6 +61,8 @@ export const Icons: Record<string, (p: IP) => JSX.Element> = {
   refresh: (p) => (<Icon {...p} size={p.size || 15}><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v5h-5" /></Icon>),
   globe: (p) => (<Icon {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18A14 14 0 0 1 12 3Z" /></Icon>),
   cog: (p) => (<Icon {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></Icon>),
+  menu: (p) => (<Icon {...p}><path d="M4 6h16M4 12h16M4 18h16" /></Icon>),
+  filter: (p) => (<Icon {...p}><path d="M3 5h18l-7 8v6l-4-2v-4z" /></Icon>),
 };
 
 export function Badge({ status, label }: { status: string; label?: string }) {
@@ -130,4 +133,51 @@ export function timeAgo(ts: number): string {
 }
 export function clockHMS(ts: number): string {
   return new Date(ts).toLocaleTimeString("en-GB", { hour12: false });
+}
+
+// instOK — node filter helper. filter is an array of instance names;
+// empty / null / undefined means "all nodes".
+export function instOK(filter: string[] | null | undefined, name: string): boolean {
+  return !filter || filter.length === 0 || filter.indexOf(name) !== -1;
+}
+
+type DataCardRow = { label: ReactNode; value: ReactNode } | null | false;
+
+// DataCard — compact mobile stand-in for one dense table row. The header shows
+// the primary name + a status Badge (or a custom `badge` node); `rows` is a
+// small list of {label, value} meta lines. Secondary columns are omitted here
+// and surfaced in the detail drawer that opens on tap.
+export function DataCard({
+  onClick, selected, title, titleSub, status, badge, rows,
+}: {
+  onClick?: () => void;
+  selected?: boolean;
+  title: ReactNode;
+  titleSub?: string;
+  status?: string;
+  badge?: ReactNode;
+  rows?: DataCardRow[];
+}) {
+  const meta = (rows || []).filter(Boolean) as { label: ReactNode; value: ReactNode }[];
+  return (
+    <div className={`mcard${selected ? " sel" : ""}`} onClick={onClick}>
+      <div className="mcard-head">
+        <div className="mcard-title">
+          {title}
+          {titleSub ? <span className="mcard-sub faint"> {titleSub}</span> : null}
+        </div>
+        {status ? <Badge status={status} /> : (badge || null)}
+      </div>
+      {meta.length > 0 && (
+        <div className="mcard-meta">
+          {meta.map((r, i) => (
+            <div className="mcard-line" key={i}>
+              <span className="mcard-k">{r.label}</span>
+              <span className="mcard-v">{r.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

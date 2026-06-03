@@ -1,7 +1,7 @@
 // HTTP tables (routers/services/middlewares) + detail drawer. Ported from tv-tables.jsx.
 import { useState, useMemo } from "react";
 import type { Snapshot, Router, Service, Middleware } from "../lib/types";
-import { Icons, Badge, InstanceTag, NodeLine, MwList, SortHead, safeHref } from "../components/ui";
+import { Icons, Badge, InstanceTag, NodeLine, MwList, SortHead, safeHref, useIsMobile, DataCard } from "../components/ui";
 import { statusKind } from "../lib/types";
 import type { Sort } from "../components/ui";
 import type { Sel } from "../lib/sel";
@@ -44,6 +44,24 @@ export function HostRule({ rule }: { rule?: string }) {
 export function RoutersTable({ rows, snapshot, onSelect, selId }: { rows: Router[]; snapshot: Snapshot; onSelect: (s: Sel) => void; selId?: string }) {
   const [sort, setSort] = useState<Sort>({ key: "name", dir: "asc" });
   const sorted = useSorted(rows, sort);
+  const isMobile = useIsMobile();
+  if (isMobile) {
+    return (
+      <div className="mcard-list">
+        {sorted.map((r) => (
+          <DataCard key={r.id} selected={selId === r.id} status={r.status} title={r.shortName}
+            onClick={() => onSelect({ kind: "router", data: r })}
+            rows={[
+              r.host ? { label: "Host", value: <HostRule rule={r.rule} /> } : (r.rule ? { label: "Rule", value: <span className="mono">{r.rule}</span> } : null),
+              { label: "Service", value: <span className="mono">{r.service.replace(/@.*/, "")}</span> },
+              { label: "Node", value: <InstanceTag name={r.instance} snapshot={snapshot} /> },
+            ]}
+          />
+        ))}
+        {sorted.length === 0 && <div className="empty-row">No routers match.</div>}
+      </div>
+    );
+  }
   return (
     <div className="table-wrap">
       <table className="dtable">
@@ -80,6 +98,24 @@ export function RoutersTable({ rows, snapshot, onSelect, selId }: { rows: Router
 export function ServicesTable({ rows, snapshot, onSelect, selId }: { rows: Service[]; snapshot: Snapshot; onSelect: (s: Sel) => void; selId?: string }) {
   const [sort, setSort] = useState<Sort>({ key: "name", dir: "asc" });
   const sorted = useSorted(rows, sort);
+  const isMobile = useIsMobile();
+  if (isMobile) {
+    return (
+      <div className="mcard-list">
+        {sorted.map((s) => (
+          <DataCard key={s.id} selected={selId === s.id} status={s.status} title={s.shortName}
+            onClick={() => onSelect({ kind: "service", data: s })}
+            rows={[
+              { label: "Type", value: <span className="pill-soft">{s.type}</span> },
+              { label: "Servers", value: <span className={`srv-up${s.serversUp < s.serversTotal ? " warn" : ""}`}>{s.serversUp}/{s.serversTotal}</span> },
+              { label: "Node", value: <InstanceTag name={s.instance} snapshot={snapshot} /> },
+            ]}
+          />
+        ))}
+        {sorted.length === 0 && <div className="empty-row">No services match.</div>}
+      </div>
+    );
+  }
   return (
     <div className="table-wrap">
       <table className="dtable">
@@ -126,6 +162,24 @@ function summarizeConfig(cfg: Record<string, unknown>): string {
 export function MiddlewaresTable({ rows, snapshot, onSelect, selId }: { rows: Middleware[]; snapshot: Snapshot; onSelect: (s: Sel) => void; selId?: string }) {
   const [sort, setSort] = useState<Sort>({ key: "name", dir: "asc" });
   const sorted = useSorted(rows, sort);
+  const isMobile = useIsMobile();
+  if (isMobile) {
+    return (
+      <div className="mcard-list">
+        {sorted.map((m) => (
+          <DataCard key={m.id} selected={selId === m.id} title={m.name}
+            badge={<span className="pill-soft">{m.type}</span>}
+            onClick={() => onSelect({ kind: "middleware", data: m })}
+            rows={[
+              { label: "Used by", value: m.usedBy > 0 ? <span className="usedby">{m.usedBy}</span> : <span className="faint">unused</span> },
+              { label: "Node", value: <InstanceTag name={m.instance} snapshot={snapshot} /> },
+            ]}
+          />
+        ))}
+        {sorted.length === 0 && <div className="empty-row">No middlewares match.</div>}
+      </div>
+    );
+  }
   return (
     <div className="table-wrap">
       <table className="dtable">

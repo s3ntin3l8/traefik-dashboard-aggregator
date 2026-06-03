@@ -1,7 +1,7 @@
 // TCP / UDP routers, services, middlewares + drawer. Ported from tv-tables.jsx ProtocolView.
 import { useState, useMemo } from "react";
 import type { Snapshot, Router, Service, Middleware } from "../lib/types";
-import { Icons, Badge, InstanceTag, NodeLine, statusKind, safeHref } from "../components/ui";
+import { Icons, Badge, InstanceTag, NodeLine, statusKind, safeHref, useIsMobile, DataCard, instOK } from "../components/ui";
 import { HostRule } from "./Tables";
 import type { Sel } from "../lib/sel";
 
@@ -20,7 +20,7 @@ export function ProtocolView({ proto, kind, snapshot, search, fInstance, fStatus
   kind: Kind;
   snapshot: Snapshot;
   search: string;
-  fInstance: string | null;
+  fInstance: string[];
   fStatus: string | null;
   setFStatus: (s: string | null) => void;
 }) {
@@ -39,7 +39,7 @@ export function ProtocolView({ proto, kind, snapshot, search, fInstance, fStatus
       : isRouters ? snapshot.udpRouters : snapshot.udpServices;
 
   const rows = (all || []).filter((r) =>
-    (!fInstance || r.instance === fInstance) &&
+    instOK(fInstance, r.instance) &&
     (isMw || !fStatus || statusKind(r.status) === fStatus) &&
     (!q ||
       r.name.toLowerCase().includes(q) ||
@@ -53,7 +53,7 @@ export function ProtocolView({ proto, kind, snapshot, search, fInstance, fStatus
       <div className="page-head">
         <div>
           <h1 className="page-title">{P} {Noun}</h1>
-          <div className="page-desc">{rows.length} {P} {noun}{rows.length === 1 ? "" : "s"}{fInstance || fStatus || q ? " · filtered" : " · across all nodes"}</div>
+          <div className="page-desc">{rows.length} {P} {noun}{rows.length === 1 ? "" : "s"}{fInstance.length || fStatus || q ? " · filtered" : " · across all nodes"}</div>
         </div>
         <div className="chips">
           {!isMw && ["ok", "warn", "down"].map((s) => (
@@ -64,58 +64,92 @@ export function ProtocolView({ proto, kind, snapshot, search, fInstance, fStatus
         </div>
       </div>
 
-      <div className="table-wrap">
-        <table className="tv-table">
-          {isMw ? (
-            <thead><tr><th>Middleware</th><th>Type</th><th>Config</th><th>Used by</th><th>Node</th></tr></thead>
-          ) : isRouters ? (
-            <thead><tr>
-              <th style={{ width: 26 }}></th><th>Router</th>
-              {proto === "tcp" && <th>Rule</th>}<th>Service</th><th>Entrypoint</th>
-              {proto === "tcp" && <th>TLS</th>}<th>Node</th><th>Status</th>
-            </tr></thead>
-          ) : (
-            <thead><tr>
-              <th style={{ width: 26 }}></th><th>Service</th><th>Type</th><th>Backend</th><th>Used by</th><th>Node</th><th>Status</th>
-            </tr></thead>
-          )}
-          <tbody>
-            {isRouters && rows.map((r: Router) => (
-              <tr key={r.id} onClick={() => setSel({ kind: "router", proto, data: r })}>
-                <td><span className={`sdot s-${statusKind(r.status)}`}></span></td>
-                <td className="cell-name cell-mono">{r.name.replace(/@.*/, "")}<span className="faint" style={{ fontWeight: 400, fontSize: 11 }}> @{r.name.split("@")[1] || "docker"}</span></td>
-                {proto === "tcp" && <td className="cell-mono muted"><HostRule rule={r.rule} /></td>}
-                <td className="cell-mono muted">{(r.service || "").replace(/@.*/, "")}</td>
-                <td>{(r.entryPoints || []).map((e) => <span className="ep" key={e}>{e}</span>)}</td>
-                {proto === "tcp" && <td>{r.tls ? <span className="itag"><Icons.lock size={12} /> passthrough</span> : <span className="faint">—</span>}</td>}
-                <td><InstanceTag name={r.instance} snapshot={snapshot} /></td>
-                <td><Badge status={r.status} /></td>
-              </tr>
-            ))}
-            {!isRouters && !isMw && rows.map((s: Service) => (
-              <tr key={s.id} onClick={() => setSel({ kind: "service", proto, data: s })}>
-                <td><span className={`sdot s-${statusKind(s.status)}`}></span></td>
-                <td className="cell-name cell-mono">{s.shortName}<span className="faint" style={{ fontWeight: 400, fontSize: 11 }}> @{s.provider}</span></td>
-                <td><span className="badge neutral">{proto}</span></td>
-                <td className="cell-mono muted">{(s.servers && s.servers[0] && s.servers[0].address) || "—"}{s.servers && s.servers.length > 1 ? ` +${s.servers.length - 1}` : ""}</td>
-                <td className="cell-mono muted tabnum">{(s.usedBy || []).length}</td>
-                <td><InstanceTag name={s.instance} snapshot={snapshot} /></td>
-                <td><Badge status={s.status} /></td>
-              </tr>
-            ))}
-            {isMw && rows.map((m: Middleware) => (
-              <tr key={m.id} onClick={() => setSel({ kind: "middleware", proto, data: m })}>
-                <td className="cell-name cell-mono">{m.name}</td>
-                <td><span className="badge neutral">{m.type}</span></td>
-                <td className="cell-mono faint" style={{ fontSize: 11, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summarize(m.config)}</td>
-                <td className="cell-mono muted tabnum">{m.usedBy}</td>
-                <td><InstanceTag name={m.instance} snapshot={snapshot} /></td>
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={8} className="empty">No {P} {noun}s discovered yet.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      {useIsMobile() ? (
+        <div className="mcard-list">
+          {isRouters && rows.map((r: Router) => (
+            <DataCard key={r.id} status={r.status} title={r.name.replace(/@.*/, "")} titleSub={`@${r.name.split("@")[1] || "docker"}`}
+              onClick={() => setSel({ kind: "router", proto, data: r })}
+              rows={[
+                { label: "Service", value: <span className="mono">{(r.service || "").replace(/@.*/, "")}</span> },
+                { label: "Entrypoint", value: (r.entryPoints || []).join(", ") || "—" },
+                { label: "Node", value: <InstanceTag name={r.instance} snapshot={snapshot} /> },
+              ]}
+            />
+          ))}
+          {!isRouters && !isMw && rows.map((s: Service) => (
+            <DataCard key={s.id} status={s.status} title={s.shortName} titleSub={`@${s.provider}`}
+              onClick={() => setSel({ kind: "service", proto, data: s })}
+              rows={[
+                { label: "Backend", value: <span className="mono">{(s.servers && s.servers[0] && s.servers[0].address) || "—"}{s.servers && s.servers.length > 1 ? ` +${s.servers.length - 1}` : ""}</span> },
+                { label: "Node", value: <InstanceTag name={s.instance} snapshot={snapshot} /> },
+              ]}
+            />
+          ))}
+          {isMw && rows.map((m: Middleware) => (
+            <DataCard key={m.id} title={m.name} badge={<span className="badge neutral">{m.type}</span>}
+              onClick={() => setSel({ kind: "middleware", proto, data: m })}
+              rows={[
+                { label: "Used by", value: <span className="mono">{m.usedBy}</span> },
+                { label: "Node", value: <InstanceTag name={m.instance} snapshot={snapshot} /> },
+              ]}
+            />
+          ))}
+          {!rows.length && <div className="empty-row">No {P} {noun}s discovered yet.</div>}
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="tv-table">
+            {isMw ? (
+              <thead><tr><th>Middleware</th><th>Type</th><th>Config</th><th>Used by</th><th>Node</th></tr></thead>
+            ) : isRouters ? (
+              <thead><tr>
+                <th style={{ width: 26 }}></th><th>Router</th>
+                {proto === "tcp" && <th>Rule</th>}<th>Service</th><th>Entrypoint</th>
+                {proto === "tcp" && <th>TLS</th>}<th>Node</th><th>Status</th>
+              </tr></thead>
+            ) : (
+              <thead><tr>
+                <th style={{ width: 26 }}></th><th>Service</th><th>Type</th><th>Backend</th><th>Used by</th><th>Node</th><th>Status</th>
+              </tr></thead>
+            )}
+            <tbody>
+              {isRouters && rows.map((r: Router) => (
+                <tr key={r.id} onClick={() => setSel({ kind: "router", proto, data: r })}>
+                  <td><span className={`sdot s-${statusKind(r.status)}`}></span></td>
+                  <td className="cell-name cell-mono">{r.name.replace(/@.*/, "")}<span className="faint" style={{ fontWeight: 400, fontSize: 11 }}> @{r.name.split("@")[1] || "docker"}</span></td>
+                  {proto === "tcp" && <td className="cell-mono muted"><HostRule rule={r.rule} /></td>}
+                  <td className="cell-mono muted">{(r.service || "").replace(/@.*/, "")}</td>
+                  <td>{(r.entryPoints || []).map((e) => <span className="ep" key={e}>{e}</span>)}</td>
+                  {proto === "tcp" && <td>{r.tls ? <span className="itag"><Icons.lock size={12} /> passthrough</span> : <span className="faint">—</span>}</td>}
+                  <td><InstanceTag name={r.instance} snapshot={snapshot} /></td>
+                  <td><Badge status={r.status} /></td>
+                </tr>
+              ))}
+              {!isRouters && !isMw && rows.map((s: Service) => (
+                <tr key={s.id} onClick={() => setSel({ kind: "service", proto, data: s })}>
+                  <td><span className={`sdot s-${statusKind(s.status)}`}></span></td>
+                  <td className="cell-name cell-mono">{s.shortName}<span className="faint" style={{ fontWeight: 400, fontSize: 11 }}> @{s.provider}</span></td>
+                  <td><span className="badge neutral">{proto}</span></td>
+                  <td className="cell-mono muted">{(s.servers && s.servers[0] && s.servers[0].address) || "—"}{s.servers && s.servers.length > 1 ? ` +${s.servers.length - 1}` : ""}</td>
+                  <td className="cell-mono muted tabnum">{(s.usedBy || []).length}</td>
+                  <td><InstanceTag name={s.instance} snapshot={snapshot} /></td>
+                  <td><Badge status={s.status} /></td>
+                </tr>
+              ))}
+              {isMw && rows.map((m: Middleware) => (
+                <tr key={m.id} onClick={() => setSel({ kind: "middleware", proto, data: m })}>
+                  <td className="cell-name cell-mono">{m.name}</td>
+                  <td><span className="badge neutral">{m.type}</span></td>
+                  <td className="cell-mono faint" style={{ fontSize: 11, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summarize(m.config)}</td>
+                  <td className="cell-mono muted tabnum">{m.usedBy}</td>
+                  <td><InstanceTag name={m.instance} snapshot={snapshot} /></td>
+                </tr>
+              ))}
+              {!rows.length && <tr><td colSpan={8} className="empty">No {P} {noun}s discovered yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {sel && <ProtoDrawer item={sel} snapshot={snapshot} onClose={() => setSel(null)} onSelect={setSel} />}
     </div>
