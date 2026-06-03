@@ -37,8 +37,22 @@ export default defineConfig({
             purpose: "any",
           },
           {
+            // 1024 source so Android's large splash logo (~288dp, up to ~1152px
+            // on high-density screens) renders crisp instead of upscaling 512.
+            src: "/pwa-1024x1024.png",
+            sizes: "1024x1024",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
             src: "/pwa-maskable-512x512.png",
             sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/pwa-maskable-1024x1024.png",
+            sizes: "1024x1024",
             type: "image/png",
             purpose: "maskable",
           },

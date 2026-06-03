@@ -1,5 +1,14 @@
 # Changelog
 
+## [v1.1.2] — 2026-06-03
+
+### Fixes
+
+- **Crisp PWA splash logo on Android** — added 1024×1024 `any` and `maskable` icons to the web manifest. Android 12+ renders the launch/splash logo at ~288 dp (≈576–1152 px on 2×–4× screens), so the previous 512 source was upscaled and looked soft. Chrome now has a large enough source to render the splash sharply. Regenerated via `scripts/gen-icons.mjs`.
+  - **Note:** Android bakes PWA icons into a cached WebAPK at install time. To see the new splash you must **uninstall the installed app, clear the site's data in Chrome, then reinstall** — a reload or in-place reinstall will keep showing the old cached splash.
+
+---
+
 ## [v1.1.1] — 2026-06-03
 
 ### Fixes
