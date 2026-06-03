@@ -182,6 +182,35 @@ go run ./cmd/server -config ./config.yaml -debug
 cd web && npm install && npm run dev
 ```
 
+## Branding / app icons
+
+The favicon and PWA icon set are **generated**, not hand-edited. Sources live in
+`web/branding/` (`icon.svg` = full-bleed badge for PWA/apple-touch; `favicon.svg`
+= small-tuned tab favicon). The outputs in `web/public/` (`favicon.{svg,ico}`,
+`apple-touch-icon.png`, `pwa-*.png`) are committed, so CI and Docker never run the
+generator.
+
+To change the logo:
+
+```sh
+# 1. edit web/branding/icon.svg and/or favicon.svg
+# 2. regenerate the committed PNG/ICO outputs
+cd web && npm i -D --no-save sharp png-to-ico && node scripts/gen-icons.mjs
+# 3. rebuild + commit the regenerated web/public/ assets
+```
+
+The PWA manifest (name, colors, icon list) is owned by `vite-plugin-pwa` in
+[`web/vite.config.ts`](web/vite.config.ts) — add new icon sizes there, not in a
+static manifest. Android maskable icons are full-bleed `#7c6cff` so the launcher
+masks them to a gap-free circle.
+
+> **Seeing a new icon after a change:** browsers and especially **installed PWAs
+> cache icons aggressively**. On Android the icon is baked into a cached *WebAPK*
+> at install time. After deploying new assets (`docker compose pull && docker
+> compose up -d`), an already-installed app keeps the old icon until you **fully
+> uninstall it, clear the site's data in the browser, and reinstall** — a reload
+> or in-place reinstall is not enough.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
