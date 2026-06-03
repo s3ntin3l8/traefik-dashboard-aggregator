@@ -37,7 +37,7 @@ const p512 = await png(iconSvg, 512);
 // corner mask, so flatten the badge's transparent corners onto the accent.
 const apple = await sharp(iconSvg, { density: 384 })
   .resize(180, 180, { fit: "contain" })
-  .flatten({ background: "#6d5cf0" })
+  .flatten({ background: "#7c6cff" })
   .png()
   .toBuffer();
 
@@ -48,7 +48,7 @@ const inset = await sharp(iconSvg, { density: 384 })
   .png()
   .toBuffer();
 const maskable = await sharp({
-  create: { width: 512, height: 512, channels: 4, background: "#6d5cf0" },
+  create: { width: 512, height: 512, channels: 4, background: "#7c6cff" },
 })
   .composite([{ input: inset, gravity: "center" }])
   .png()

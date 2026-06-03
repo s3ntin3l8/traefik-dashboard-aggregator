@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.1.1] — 2026-06-03
+
+### Fixes
+
+- **App icon / favicon refresh** — the installed-app (PWA) and browser-tab icons now use a flat `#7c6cff` badge carrying the same waveform glyph as the in-app logo, replacing the earlier gradient badge with a different waveform. Regenerated the full icon set (favicon, apple-touch, PWA 192/512, maskable) from the updated `web/branding/` sources via `scripts/gen-icons.mjs`. Note: already-installed PWAs cache the old home-screen icon; remove and re-add the shortcut to see the new one.
+
+---
+
 ## [v1.1.0] — 2026-06-03
 
 ### Features

@@ -1,17 +1,7 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Traefik Dashboard Aggregator">
-  <defs>
-    <linearGradient id="badge" x1="64" y1="48" x2="448" y2="472" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8b7bff"/>
-      <stop offset="1" stop-color="#6d5cf0"/>
-    </linearGradient>
-    <radialGradient id="sheen" cx="0.32" cy="0.22" r="0.85">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
-      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <rect width="512" height="512" rx="113" fill="url(#badge)"/>
-  <rect width="512" height="512" rx="113" fill="url(#sheen)"/>
-  <path d="M112 256 H176 L208 144 L272 368 L304 256 H400"
-        fill="none" stroke="#ffffff" stroke-width="40"
-        stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="512" height="512" fill="#7c6cff"/>
+  <path d="M3 12h4l2-7 4 14 2-7h6"
+        fill="none" stroke="#ffffff" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"
+        transform="translate(78.64 78.64) scale(14.78)"/>
 </svg>
