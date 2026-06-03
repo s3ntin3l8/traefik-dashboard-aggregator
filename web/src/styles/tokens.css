@@ -140,7 +140,7 @@ button { font-family: inherit; cursor: pointer; }
    LAYOUT
    ===================================================================== */
 #root { height: 100%; }
-.app { display: flex; height: 100vh; overflow: hidden; }
+.app { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
 
 /* sidebar */
 .sidebar {
@@ -793,3 +793,234 @@ button { font-family: inherit; cursor: pointer; }
 .accent-swatches { display: flex; gap: 8px; }
 .accent-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
 .accent-swatch.on { border-color: var(--text); box-shadow: 0 0 0 2px var(--panel); }
+
+/* =====================================================================
+   RESPONSIVE / MOBILE
+   The desktop layout above is unchanged. Below ~860px the fixed sidebar
+   becomes an off-canvas drawer, dense tables/log streams keep every column
+   but scroll sideways inside their panel, and grids collapse to fit.
+   ===================================================================== */
+
+/* Scroll-lock — toggled by JS when any overlay (nav/sheet/drawer) is open */
+body.no-scroll { overflow: hidden; }
+
+/* mobile data cards — JS renders these in place of dense tables under 860px
+   (see useIsMobile). Header = name + status; meta lines carry the few fields
+   worth showing at a glance; everything else lives in the detail drawer. */
+.mcard-list { display: flex; flex-direction: column; gap: 10px; }
+.mcard {
+  background: var(--panel); border: var(--border-style); border-radius: var(--radius-lg);
+  padding: 13px 15px; box-shadow: var(--shadow-lg, var(--shadow)); cursor: pointer;
+  transition: border-color .12s, background .12s, transform .08s;
+}
+.mcard:active { transform: scale(.992); }
+.mcard.sel { border-color: var(--accent); background: var(--accent-soft); }
+.mcard-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mcard-title { font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-dir="a"] .mcard-title { font-family: var(--font-mono); }
+.mcard-sub { font-weight: 400; font-size: 11.5px; }
+.mcard-meta { margin-top: 11px; display: flex; flex-direction: column; gap: 8px; }
+.mcard-line { display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 12.5px; min-width: 0; }
+.mcard-k { color: var(--text-faint); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; flex-shrink: 0; }
+.mcard-v { color: var(--text-dim); min-width: 0; text-align: right; display: flex; align-items: center; gap: 6px; justify-content: flex-end; overflow: hidden; }
+.mcard-v .itag, .mcard-v .cell-host, .mcard-v a, .mcard-v .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* off-canvas sidebar toggle and mobile bottom bar — hidden on desktop */
+.nav-scrim { display: none; }
+.mobilebar { display: none; }
+
+@media (max-width: 860px) {
+  /* off-canvas sidebar */
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: 272px; max-width: 82vw;
+    transform: translateX(-100%);
+    transition: transform .24s cubic-bezier(.2,.7,.3,1);
+    box-shadow: var(--shadow-lg, 0 20px 60px rgba(0,0,0,.5)); z-index: 70;
+    /* make the nav list scrollable */
+    overflow-y: auto;
+  }
+  .sidebar.open { transform: none; }
+  .nav-scrim {
+    display: block; position: fixed; inset: 0;
+    background: rgba(0,0,0,.5); z-index: 65; animation: fade .15s forwards;
+  }
+
+  .main { width: 100%; min-width: 0; }
+
+  /* top bar removed on mobile — each view shows its own title in the page-head,
+     and the bottom bar carries the controls. Reclaim the vertical space. */
+  .topbar { display: none; }
+
+  /* extra bottom room so content clears the floating bar */
+  .content { padding: 18px 14px 104px; }
+
+  /* page headings stack; their filter chips become a horizontal strip */
+  .page-head { flex-direction: column; align-items: stretch; gap: 12px; }
+  .page-head .chips {
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; padding-bottom: 2px;
+  }
+  .page-head .chips::-webkit-scrollbar { display: none; }
+  .page-head .chips .chip { flex-shrink: 0; }
+
+  /* stat / cert tiles two-up */
+  .stat-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { padding: 13px 14px; }
+  .stat-v { font-size: 25px; }
+  .cert-tiles { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ctile { padding: 13px 14px; }
+
+  /* dense data tables: keep all columns, scroll the panel sideways */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .dtable, .tv-table { min-width: 700px; }
+
+  /* instances + overview grids collapse */
+  .inst-grid { grid-template-columns: 1fr; }
+  .hero-grid { grid-template-columns: 1fr; }
+
+  /* logs: filters reflow, stream scrolls sideways like the tables */
+  .logs-filters-area .filter-row { flex-wrap: wrap; gap: 12px; }
+  .logs-filters-area .row { flex-wrap: wrap; gap: 12px; }
+  .range-seg.seg, .kind-seg.seg { flex: 0 0 auto; }
+  .log-stream { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .log-line { min-width: 660px; }
+
+  /* settings rows stack so controls never overflow */
+  .setting-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .setting-control { width: 100%; }
+  .setting-control .seg { min-width: 0; width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .content { padding: 16px 12px 100px; }
+  .page-title { font-size: 20px; }
+  /* detail drawer goes truly full-screen on phones (close via the × in its header) */
+  .drawer { width: 100vw; max-width: 100vw; }
+}
+
+/* =====================================================================
+   MOBILE BOTTOM BAR (Apple-style floating pill) + FILTER SHEET
+   ===================================================================== */
+@media (max-width: 860px) {
+  .mobilebar {
+    display: flex; align-items: center; gap: 9px;
+    position: fixed; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    z-index: 60; pointer-events: none;
+  }
+  .mobilebar > * { pointer-events: auto; }
+  .mobilebar-search { position: relative; flex: 1 1 auto; min-width: 0; }
+  .mobilebar .search {
+    width: 100%; padding: 12px 15px; border-radius: 999px;
+    background: color-mix(in srgb, var(--panel) 76%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    backdrop-filter: blur(22px) saturate(180%);
+    border: 1px solid color-mix(in srgb, var(--border-strong) 65%, transparent);
+    box-shadow: 0 10px 34px rgba(0,0,0,.32), 0 1px 0 rgba(255,255,255,.05) inset;
+  }
+  /* ≥16px avoids iOS focus-zoom (any size < 16px triggers it) */
+  .mobilebar .search input { font-size: 16px; }
+  .mobilebar-btn {
+    flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); cursor: pointer; position: relative;
+    background: color-mix(in srgb, var(--panel) 76%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    backdrop-filter: blur(22px) saturate(180%);
+    border: 1px solid color-mix(in srgb, var(--border-strong) 65%, transparent);
+    box-shadow: 0 10px 34px rgba(0,0,0,.32), 0 1px 0 rgba(255,255,255,.05) inset;
+    transition: color .12s, transform .08s, border-color .12s, background .12s;
+  }
+  .mobilebar-btn:active { transform: scale(.93); }
+  .mobilebar-btn.on {
+    color: #fff;
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 42%, transparent),
+                0 1px 0 rgba(255,255,255,.18) inset;
+  }
+  /* count chip floats at the top-right corner, clear of the funnel glyph */
+  .mobilebar-badge {
+    position: absolute; top: -4px; right: -4px;
+    box-sizing: border-box;
+    min-width: 20px; height: 20px; padding: 0 5px;
+    border-radius: 10px; background: #fff; color: var(--accent);
+    font-family: var(--font-ui); font-size: 11px; font-weight: 800;
+    line-height: 16px; text-align: center;
+    border: 2px solid var(--accent);
+    box-shadow: 0 2px 6px rgba(0,0,0,.2);
+  }
+
+  /* search results modal opens upward, above the bar */
+  .mobilebar .search-modal {
+    top: auto; bottom: calc(100% + 10px);
+    max-height: 56vh; overflow-y: auto;
+    box-shadow: 0 -12px 40px rgba(0,0,0,.34);
+    animation: fadeDown .15s ease;
+  }
+
+  /* ---- filter sheet ---- */
+  .sheet-scrim {
+    position: fixed; inset: 0; z-index: 80;
+    background: rgba(0,0,0,.5);
+    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+    display: flex; align-items: flex-end;
+    animation: fade .18s forwards;
+  }
+  .filter-sheet {
+    width: 100%; box-sizing: border-box;
+    background: var(--panel);
+    border-top-left-radius: 22px; border-top-right-radius: 22px;
+    border-top: var(--border-style);
+    padding: 8px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -16px 50px rgba(0,0,0,.4);
+    animation: sheetUp .26s cubic-bezier(.2,.8,.25,1);
+  }
+  .sheet-handle {
+    width: 38px; height: 4px; border-radius: 2px;
+    background: var(--border-strong); margin: 6px auto 12px;
+  }
+  .sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .sheet-head h3 {
+    margin: 0; font-family: var(--font-display);
+    font-size: 17px; font-weight: 700; color: var(--text);
+  }
+  .sheet-clear {
+    background: none; border: none; cursor: pointer;
+    font-family: var(--font-ui); font-size: 13.5px; font-weight: 600;
+    color: var(--accent); padding: 4px 2px;
+  }
+  .sheet-section { display: flex; flex-direction: column; gap: 2px; }
+  .sheet-row {
+    display: flex; align-items: center; gap: 11px;
+    width: 100%; text-align: left; cursor: pointer;
+    padding: 13px 12px; border: none; border-radius: var(--radius);
+    background: none; color: var(--text);
+    font-family: var(--font-ui); font-size: 15px;
+    transition: background .1s;
+  }
+  .sheet-row + .sheet-row { border-top: var(--border-style); border-radius: 0; }
+  .sheet-row:active { background: var(--hover); }
+  .sheet-row.on { color: var(--accent); }
+  .sheet-row-label { flex: 0 0 auto; font-weight: 600; }
+  .sheet-row-ip {
+    margin-left: auto; font-family: var(--font-mono);
+    font-size: 12.5px; color: var(--text-faint);
+  }
+  .sheet-row .sheet-check { margin-left: auto; color: var(--accent); font-weight: 700; }
+  .sheet-tick { flex: 0 0 16px; width: 16px; text-align: center; color: var(--accent); font-weight: 700; }
+  .sheet-done {
+    width: 100%; margin-top: 14px; padding: 14px;
+    border: none; border-radius: var(--radius);
+    background: var(--accent); color: #fff; cursor: pointer;
+    font-family: var(--font-ui); font-size: 15px; font-weight: 700;
+  }
+  .sheet-done:active { filter: brightness(.94); }
+}
+
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fadeDown { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

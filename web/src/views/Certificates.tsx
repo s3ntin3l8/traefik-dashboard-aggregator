@@ -1,12 +1,12 @@
 // TLS certificates view with expiry tracking. Ported from tv-certs.jsx.
 import { useState, useMemo } from "react";
 import type { Snapshot, Certificate } from "../lib/types";
-import { Icons, Badge, InstanceTag, SortHead } from "../components/ui";
+import { Icons, Badge, InstanceTag, SortHead, useIsMobile, DataCard, instOK } from "../components/ui";
 import type { Sort } from "../components/ui";
 
 type CertRowData = Certificate & { days: number; cstatus: string; challenge?: string };
 
-export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Snapshot; search: string; fInstance: string | null }) {
+export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Snapshot; search: string; fInstance: string[] }) {
   const [sort, setSort] = useState<Sort>({ key: "notAfter", dir: "asc" });
   const [fStatus, setFStatus] = useState<string | null>(null);
   const [sel, setSel] = useState<CertRowData | null>(null);
@@ -16,7 +16,7 @@ export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Sn
   const now = useMemo(() => Date.now(), [snapshot]);
   const rows = useMemo<CertRowData[]>(() => {
     let cs = snapshot.certificates || [];
-    if (fInstance) cs = cs.filter((c) => c.instance === fInstance);
+    if (fInstance.length) cs = cs.filter((c) => instOK(fInstance, c.instance));
     const q = (search || "").trim().toLowerCase();
     if (q) cs = cs.filter((c) => c.domain.toLowerCase().includes(q) || (c.sans || []).some((s) => s.toLowerCase().includes(q)));
     const statusOf = (d: number) => (d < 0 ? "expired" : d <= 21 ? "expiring" : "valid");
@@ -36,7 +36,7 @@ export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Sn
   }, [snapshot, search, fInstance, fStatus, sort, now]);
 
   const counts = useMemo(() => {
-    const cs = (snapshot.certificates || []).filter((c) => !fInstance || c.instance === fInstance);
+    const cs = (snapshot.certificates || []).filter((c) => instOK(fInstance, c.instance));
     const m = { total: cs.length, valid: 0, expiring: 0, expired: 0 };
     cs.forEach((c) => {
       const d = Math.floor((c.notAfter - now) / 86400000);
@@ -52,7 +52,7 @@ export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Sn
       <div className="page-head">
         <div>
           <h1 className="page-title">Certificates</h1>
-          <div className="page-desc">{rows.length} of {counts.total} certificates{fInstance || fStatus || search ? " · filtered" : " · across all nodes"}</div>
+          <div className="page-desc">{rows.length} of {counts.total} certificates{fInstance.length || fStatus || search ? " · filtered" : " · across all nodes"}</div>
         </div>
       </div>
 
@@ -74,24 +74,44 @@ export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Sn
         </div>
       </div>
 
-      <div className="table-wrap">
-        <table className="dtable cert-table">
-          <thead>
-            <tr>
-              <th style={{ width: 26 }}></th>
-              <SortHead col="domain" label="Domain" sort={sort} setSort={setSort} />
-              <th>SANs</th>
-              <th>Resolver</th>
-              <th>Issuer</th>
-              <SortHead col="notAfter" label="Expires" sort={sort} setSort={setSort} />
-              <SortHead col="instance" label="Node" sort={sort} setSort={setSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((c) => <CertRow key={c.id} c={c} snapshot={snapshot} onSelect={() => setSel(c)} />)}
-          </tbody>
-        </table>
-      </div>
+      {useIsMobile() ? (
+        <div className="mcard-list">
+          {rows.map((c) => {
+            const k = c.cstatus === "valid" ? "ok" : c.cstatus === "expiring" ? "warn" : "down";
+            return (
+              <DataCard key={c.id} onClick={() => setSel(c)}
+                title={<>{c.wildcard && <span className="wild">✲</span>}{c.domain}</>}
+                badge={<span className={`badge ${k}`}><span className={`sdot s-${k}`}></span>{c.cstatus}</span>}
+                rows={[
+                  { label: "Expires", value: <span className={`exp-days ${k}`}>{c.days < 0 ? `expired ${-c.days}d ago` : `${c.days}d`}</span> },
+                  { label: "Resolver", value: <span className="pill-soft">{c.resolver || "—"}</span> },
+                  { label: "Node", value: <InstanceTag name={c.instance} snapshot={snapshot} /> },
+                ]}
+              />
+            );
+          })}
+          {rows.length === 0 && <div className="empty-row">No certificates match.</div>}
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="dtable cert-table">
+            <thead>
+              <tr>
+                <th style={{ width: 26 }}></th>
+                <SortHead col="domain" label="Domain" sort={sort} setSort={setSort} />
+                <th>SANs</th>
+                <th>Resolver</th>
+                <th>Issuer</th>
+                <SortHead col="notAfter" label="Expires" sort={sort} setSort={setSort} />
+                <SortHead col="instance" label="Node" sort={sort} setSort={setSort} />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => <CertRow key={c.id} c={c} snapshot={snapshot} onSelect={() => setSel(c)} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {sel && <CertDrawer cert={sel} onClose={() => setSel(null)} />}
     </div>

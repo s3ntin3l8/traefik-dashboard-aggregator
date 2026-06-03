@@ -6,7 +6,7 @@ import type { Snapshot, LogEntry } from "../lib/types";
 import { Icons } from "../components/ui";
 import { fetchLogs, fetchFeatures } from "../lib/sse";
 
-export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snapshot; globalSearch: string; fInstance: string | null }) {
+export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snapshot; globalSearch: string; fInstance: string[] }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [live, setLive] = useState(true);
   const [level, setLevel] = useState<string | null>(null);
@@ -34,13 +34,17 @@ export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snap
   const winStart = zoom ? zoom.start : now - range;
   const winEnd = zoom ? zoom.end : now;
 
+  // When exactly one instance is selected pass it to the backend; if multiple
+  // or none are selected, fetch all and filter client-side via fInstance.
+  const singleInstance = fInstance.length === 1 ? fInstance[0] : null;
+
   // load the selected window whenever range/zoom/instance changes. The backend
   // builds the Loki selector; we only pass the (optional) instance filter.
   useEffect(() => {
     if (!lokiEnabled) return;
     let cancelled = false;
     fetchLogs({
-      instance: fInstance,
+      instance: singleInstance,
       startMs: zoom ? zoom.start : Date.now() - range,
       endMs: zoom ? zoom.end : Date.now(),
       limit: 1000
@@ -48,13 +52,13 @@ export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snap
       .then((rows) => !cancelled && setLogs(rows))
       .catch((e) => !cancelled && setErr(String(e)));
     return () => { cancelled = true; };
-  }, [range, zoom, lokiEnabled, fInstance]);
+  }, [range, zoom, lokiEnabled, singleInstance]);
 
   // live tail via SSE
   useEffect(() => {
     if (!lokiEnabled || !live || zoom) return;
-    const url = fInstance
-      ? `/api/logs/tail?instance=${encodeURIComponent(fInstance)}`
+    const url = singleInstance
+      ? `/api/logs/tail?instance=${encodeURIComponent(singleInstance)}`
       : `/api/logs/tail`;
     const es = new EventSource(url);
     es.addEventListener("log", (e) => {
@@ -68,7 +72,7 @@ export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snap
       } catch { /* ignore */ }
     });
     return () => es.close();
-  }, [live, zoom, lokiEnabled, fInstance]);
+  }, [live, zoom, lokiEnabled, singleInstance]);
 
   const filtered = useMemo(() => {
     const gq = (globalSearch || "").trim().toLowerCase();
@@ -78,8 +82,8 @@ export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snap
       if (level && l.level !== level) return false;
       // Kind filter (access vs system)
       if (kind && l.kind !== kind) return false;
-      // Instance filter (handled by backend too, but for tail consistency)
-      if (fInstance && l.instance !== fInstance) return false;
+      // Instance filter (handled by backend when single; multi-select filtered here)
+      if (fInstance.length > 0 && !fInstance.includes(l.instance)) return false;
       // Search filters
       const txt = logText(l).toLowerCase();
       if (lq && !txt.includes(lq)) return false;
@@ -97,7 +101,7 @@ export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snap
     logs.forEach((l) => {
       if (l.ts < winStart || l.ts > winEnd) return;
       if (kind && l.kind !== kind) return;
-      if (fInstance && l.instance !== fInstance) return;
+      if (fInstance.length > 0 && !fInstance.includes(l.instance)) return;
       const txt = logText(l).toLowerCase();
       if (lq && !txt.includes(lq)) return;
       if (gq && !txt.includes(gq)) return;
@@ -134,7 +138,7 @@ export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snap
       <div className="logs-filters-area">
         <div className="filter-row">
           <div className="logql" style={{ width: "100%", maxWidth: "none" }}>
-            <span className="logql-brace">{`{`}</span>job=<span className="logql-val">"docker"</span>, container=<span className="logql-val">"traefik"</span>{fInstance && <>, instance=<span className="logql-val">"{fInstance}"</span></>}<span className="logql-brace">{`}`}</span>
+            <span className="logql-brace">{`{`}</span>job=<span className="logql-val">"docker"</span>, container=<span className="logql-val">"traefik"</span>{fInstance.length === 1 && <>, instance=<span className="logql-val">"{fInstance[0]}"</span></>}{fInstance.length > 1 && <>, instance=~<span className="logql-val">"{fInstance.join("|")}"</span></>}<span className="logql-brace">{`}`}</span>
             <input className="logql-input" placeholder="|= filter expression…" value={q} onChange={(e) => setQ(e.target.value)} />
             <span className="src-tag">via Loki</span>
           </div>
