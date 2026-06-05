@@ -76,7 +76,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (p === "/api/config") {
-    sendJSON(res, { lokiEnabled: true });
+    sendJSON(res, { lokiEnabled: true, authentikEnabled: true });
     return;
   }
 

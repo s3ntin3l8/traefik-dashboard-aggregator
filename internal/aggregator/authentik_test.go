@@ -102,6 +102,55 @@ func TestEnrichAuthentik(t *testing.T) {
 	}
 }
 
+// Routers often attach authentik through a chain middleware (strip-identity +
+// forwardAuth, per docs/authentik.md) and reference only the chain. The chain
+// must be resolved: router enriched, chain AND inner forwardAuth aggregated.
+func TestEnrichAuthentikThroughChain(t *testing.T) {
+	s := testStore()
+	s.SetAuthentik(testIndex())
+
+	res := traefik.InstanceResult{
+		Name: "mgmt",
+		Middlewares: []model.Middleware{
+			{Instance: "mgmt", Name: "chain-authentik", FullName: "chain-authentik@file",
+				Type:     "chain",
+				Provider: "file",
+				Config:   map[string]any{"middlewares": []any{"strip-identity@file", "forwardAuth-authentik@file"}}},
+			{Instance: "mgmt", Name: "strip-identity", FullName: "strip-identity@file",
+				Type: "headers", Config: map[string]any{}},
+			authentikMw("mgmt", "forwardAuth-authentik@file",
+				"http://authentik-outpost:9000/outpost.goauthentik.io/auth/traefik"),
+		},
+		HTTPRouters: []model.Router{
+			{Instance: "mgmt", Name: "traefik-viewer@docker", Status: "enabled",
+				Host:        "traefik-viewer.example.com",
+				Middlewares: []string{"chain-authentik@file"}},
+		},
+	}
+	s.Apply([]traefik.InstanceResult{res}, time.Now().UnixMilli(), nil)
+	snap := s.Snapshot()
+
+	r := snap.HTTPRouters[0]
+	if r.Authentik == nil || r.Authentik.Application != "forwardAuth-authentik" {
+		t.Errorf("router behind a chain should be enriched via the domain app, got %+v", r.Authentik)
+	}
+	for i := range snap.Middlewares {
+		m := snap.Middlewares[i]
+		switch m.FullName {
+		case "chain-authentik@file", "forwardAuth-authentik@file":
+			if m.Authentik == nil {
+				t.Errorf("%s should carry the authentik marker", m.FullName)
+			} else if len(m.Authentik.Applications) != 1 || m.Authentik.Applications[0] != "forwardAuth-authentik" {
+				t.Errorf("%s apps = %v, want [forwardAuth-authentik]", m.FullName, m.Authentik.Applications)
+			}
+		case "strip-identity@file":
+			if m.Authentik != nil {
+				t.Error("a non-authentik chain member must not be marked")
+			}
+		}
+	}
+}
+
 // Without an index (enrichment disabled or first fetch pending), authentik
 // middlewares still get the bare marker so the UI can badge them.
 func TestEnrichAuthentikWithoutIndex(t *testing.T) {

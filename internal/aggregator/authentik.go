@@ -35,27 +35,85 @@ func (s *Store) enrichAuthentik(snap *model.Snapshot) {
 	// instance + fullName -> middleware, for resolving router middleware refs.
 	type mwKey struct{ instance, fullName string }
 	mws := make(map[mwKey]*model.Middleware, len(snap.Middlewares))
-	apps := map[*model.Middleware]map[string]bool{}
-	outposts := map[*model.Middleware]map[string]bool{}
 	for i := range snap.Middlewares {
 		m := &snap.Middlewares[i]
 		mws[mwKey{m.Instance, m.FullName}] = m
+	}
+
+	// targets[m] = the authentik forward-auth middlewares m resolves to:
+	// itself, or — for chain middlewares — the authentik members reached
+	// transitively. Routers often attach authentik via a chain (e.g.
+	// strip-identity + forwardAuth, see docs/authentik.md), in which case the
+	// router only references the chain.
+	targets := map[*model.Middleware]map[*model.Middleware]bool{}
+	for i := range snap.Middlewares {
+		m := &snap.Middlewares[i]
 		if isAuthentikMiddleware(m) {
-			m.Authentik = &model.MiddlewareAuthentik{}
-			apps[m] = map[string]bool{}
-			outposts[m] = map[string]bool{}
+			targets[m] = map[*model.Middleware]bool{m: true}
 		}
 	}
-	if len(apps) == 0 {
+	if len(targets) == 0 {
 		return
+	}
+	// Chains may nest; iterate to a fixpoint, depth-capped (cycle-safe: the
+	// union only grows).
+	for depth := 0; depth < 4; depth++ {
+		changed := false
+		for i := range snap.Middlewares {
+			m := &snap.Middlewares[i]
+			if !strings.EqualFold(m.Type, "chain") {
+				continue
+			}
+			for _, name := range toStringList(m.Config["middlewares"]) {
+				member, ok := mws[mwKey{m.Instance, name}]
+				if !ok {
+					// chain entries may omit the provider suffix
+					member, ok = mws[mwKey{m.Instance, name + "@" + m.Provider}]
+				}
+				if !ok {
+					continue
+				}
+				for t := range targets[member] {
+					if !targets[m][t] {
+						if targets[m] == nil {
+							targets[m] = map[*model.Middleware]bool{}
+						}
+						targets[m][t] = true
+						changed = true
+					}
+				}
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+
+	// Mark every authentik-guarding middleware (forward-auths and chains) and
+	// prepare their aggregation sets. The bare marker alone drives the UI badge
+	// even when no router/app match exists.
+	apps := map[*model.Middleware]map[string]bool{}
+	outposts := map[*model.Middleware]map[string]bool{}
+	for m := range targets {
+		m.Authentik = &model.MiddlewareAuthentik{}
+		apps[m] = map[string]bool{}
+		outposts[m] = map[string]bool{}
 	}
 
 	for i := range snap.HTTPRouters {
 		r := &snap.HTTPRouters[i]
-		var guards []*model.Middleware
+		// The marked middlewares this router is guarded through: each
+		// referenced marked middleware plus the forward-auths it resolves to,
+		// so a chain and its inner forwardAuth both aggregate the app.
+		guards := map[*model.Middleware]bool{}
 		for _, name := range r.Middlewares {
-			if m, ok := mws[mwKey{r.Instance, name}]; ok && m.Authentik != nil {
-				guards = append(guards, m)
+			m, ok := mws[mwKey{r.Instance, name}]
+			if !ok || m.Authentik == nil {
+				continue
+			}
+			guards[m] = true
+			for t := range targets[m] {
+				guards[t] = true
 			}
 		}
 		if len(guards) == 0 || s.authentik == nil {
@@ -76,7 +134,7 @@ func (s *Store) enrichAuthentik(snap *model.Snapshot) {
 		if display == "" {
 			display = a.Provider
 		}
-		for _, m := range guards {
+		for m := range guards {
 			if display != "" {
 				apps[m][display] = true
 			}
@@ -101,6 +159,23 @@ func isAuthentikMiddleware(m *model.Middleware) bool {
 	}
 	addr, _ := m.Config["address"].(string)
 	return strings.Contains(addr, authentikSignature)
+}
+
+// toStringList converts a decoded-JSON []any (or []string) to []string.
+func toStringList(v any) []string {
+	switch vv := v.(type) {
+	case []string:
+		return vv
+	case []any:
+		out := make([]string, 0, len(vv))
+		for _, e := range vv {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 func sortedKeys(set map[string]bool) []string {

@@ -184,6 +184,26 @@ export function buildSnapshot(now = Date.now()) {
     });
   }
 
+  // authentik enrichment — mirrors the backend's aggregator pass: routers behind
+  // the forward-auth middleware (its address carries outpost.goauthentik.io) get
+  // the matched application; the shared middleware aggregates the distinct apps.
+  {
+    const outpost = "authentik Embedded Outpost";
+    const akUsers = httpRouters.filter((rt) => rt.middlewares.includes("forward-auth@docker"));
+    akUsers.forEach((rt, i) => {
+      rt.authentik = i === 0
+        ? { application: "example.com (forward auth)", slug: "example-com-forward-auth", provider: "example.com forward auth", outpost, mode: "forward_domain" }
+        : { application: rt.shortName, slug: rt.shortName, provider: `Provider for ${rt.shortName}`, outpost, mode: "forward_single" };
+    });
+    const akMw = middlewares.find((m) => m.fullName === "forward-auth@docker");
+    if (akMw) {
+      akMw.authentik = {
+        applications: [...new Set(akUsers.map((rt) => rt.authentik.application))].sort(),
+        outposts: [outpost],
+      };
+    }
+  }
+
   // certificates: one per a subset of hosts + a wildcard per node, mixed expiry
   const issuers = [
     { issuer: "Let's Encrypt", cn: "R3", key: "RSA 2048" },
