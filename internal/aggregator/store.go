@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/authentik"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/model"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/traefik"
@@ -19,14 +20,15 @@ import (
 // Store holds the latest aggregated snapshot plus per-instance last-good data,
 // so an unreachable node keeps showing its previous state (flagged stale).
 type Store struct {
-	mu       sync.RWMutex
-	domain   string
-	order    []string                          // instance order from config
-	meta     map[string]config.Instance        // name -> config
-	lastGood map[string]traefik.InstanceResult // name -> last successful scrape
-	health   map[string]instanceHealth         // name -> live health
-	snapshot *model.Snapshot
-	hash     [32]byte
+	mu        sync.RWMutex
+	domain    string
+	order     []string                          // instance order from config
+	meta      map[string]config.Instance        // name -> config
+	lastGood  map[string]traefik.InstanceResult // name -> last successful scrape
+	health    map[string]instanceHealth         // name -> live health
+	authentik *authentik.Index                  // latest authentik index; nil when disabled
+	snapshot  *model.Snapshot
+	hash      [32]byte
 }
 
 type instanceHealth struct {
@@ -144,6 +146,7 @@ func (s *Store) build(now int64) *model.Snapshot {
 	}
 	sort.Strings(snap.EntryPoints)
 	annotateCertStatus(snap.Certificates, now)
+	s.enrichAuthentik(snap)
 	return snap
 }
 

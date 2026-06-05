@@ -36,6 +36,15 @@ loki:
   #   job: docker
   #   container: traefik
 
+# Authentik enrichment (optional). When set, routers protected by an authentik
+# forward-auth middleware show the matching application / provider / outpost.
+# Needs a read-only API token (authentik: Directory → Tokens → Create, intent
+# "API"). Leave url or token empty to disable.
+authentik:
+  url: ""                        # e.g. https://authentik.example.com
+  token: ${AUTHENTIK_TOKEN:-}
+  # insecureSkipVerify: true     # if the API host serves a self-signed cert
+
 instances:
   # One entry per Traefik instance (gateway + each downstream node).
   # role: "gateway" renders this instance as the central hub in the topology

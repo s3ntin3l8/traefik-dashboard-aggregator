@@ -21,6 +21,7 @@ import (
 type Config struct {
 	Server    Server     `yaml:"server"`
 	Loki      Loki       `yaml:"loki"`
+	Authentik Authentik  `yaml:"authentik"`
 	Instances []Instance `yaml:"instances"`
 }
 
@@ -43,6 +44,15 @@ type Loki struct {
 	Username     string            `yaml:"username"`
 	Password     string            `yaml:"password"`
 	LabelMapping map[string]string `yaml:"labelMapping"`
+}
+
+// Authentik configures the optional authentik enrichment: forward-auth routers
+// get annotated with the application/provider/outpost guarding them. Empty URL
+// or token disables it.
+type Authentik struct {
+	URL                string `yaml:"url"`   // API base, e.g. https://authentik.example.com
+	Token              string `yaml:"token"` // read-only API token
+	InsecureSkipVerify bool   `yaml:"insecureSkipVerify"`
 }
 
 // Instance is one downstream Traefik node to scrape.
@@ -145,3 +155,6 @@ func (c *Config) validate() error {
 
 // LokiEnabled reports whether the logs backend is configured.
 func (c *Config) LokiEnabled() bool { return c.Loki.URL != "" }
+
+// AuthentikEnabled reports whether authentik enrichment is configured.
+func (c *Config) AuthentikEnabled() bool { return c.Authentik.URL != "" && c.Authentik.Token != "" }

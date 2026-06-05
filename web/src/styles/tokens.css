@@ -401,6 +401,14 @@ button { font-family: inherit; cursor: pointer; }
 .ep { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim);
   background: var(--panel-2); border: var(--border-style); padding: 2px 7px; border-radius: var(--radius-sm); }
 
+/* authentik forward-auth marker */
+.ak-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 100px;
+  background: var(--warn-bg); color: var(--warn); white-space: nowrap;
+}
+[data-dir="a"] .ak-pill { border-radius: var(--radius); font-family: var(--font-mono); letter-spacing: .02em; }
+
 .empty { padding: 60px; text-align: center; color: var(--text-faint); font-size: 13px; }
 
 /* servers bar */

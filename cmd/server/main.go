@@ -42,7 +42,7 @@ func main() {
 	if *healthcheck {
 		os.Exit(runHealthcheck(cfg.Server.ListenAddr))
 	}
-	log.Info("loaded config", "instances", len(cfg.Instances), "poll", cfg.Server.PollInterval, "loki", cfg.LokiEnabled())
+	log.Info("loaded config", "instances", len(cfg.Instances), "poll", cfg.Server.PollInterval, "loki", cfg.LokiEnabled(), "authentik", cfg.AuthentikEnabled())
 
 	store := aggregator.New(cfg)
 	hub := sse.New()

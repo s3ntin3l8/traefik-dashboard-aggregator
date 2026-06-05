@@ -21,7 +21,10 @@ func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 // handleConfig reports feature availability to the SPA (e.g. is Loki enabled).
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]any{"lokiEnabled": s.loki != nil})
+	writeJSON(w, map[string]any{
+		"lokiEnabled":      s.loki != nil,
+		"authentikEnabled": s.authentikEnabled,
+	})
 }
 
 // handleMe reflects the identity headers injected by an upstream forward-auth
