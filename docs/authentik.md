@@ -165,12 +165,19 @@ is badged `authentik` in the tables and the request chain.
 
 1. In authentik: **Directory → Tokens → Create** (intent **API**), ideally
    bound to a dedicated service account with read-only permissions.
-2. In `config.yaml`:
+2. In `.env` (gitignored — `compose.yaml` loads it via `env_file`):
+
+   ```sh
+   AUTHENTIK_URL=https://authentik.example.com   # API base (serves /api/v3/)
+   AUTHENTIK_TOKEN=...
+   ```
+
+3. In `config.yaml`:
 
    ```yaml
    authentik:
-     url: https://authentik.example.com   # API base (serves /api/v3/)
-     token: ${AUTHENTIK_TOKEN}
+     url: ${AUTHENTIK_URL:-}
+     token: ${AUTHENTIK_TOKEN:-}
      # insecureSkipVerify: true           # self-signed API cert only
    ```
 

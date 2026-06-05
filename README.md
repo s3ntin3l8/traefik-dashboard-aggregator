@@ -86,11 +86,11 @@ server:
   domain: example.com      # optional, shown in the UI
 
 loki:
-  url: ""                  # e.g. http://loki:3100 — empty disables the Logs tab
+  url: ${LOKI_URL:-}       # e.g. http://loki:3100 — empty disables the Logs tab
   labelMapping: { job: traefik }
 
 authentik:                 # optional — annotate forward-auth routers with the
-  url: ""                  # authentik application/provider/outpost guarding them
+  url: ${AUTHENTIK_URL:-}  # authentik application/provider/outpost guarding them
   token: ${AUTHENTIK_TOKEN:-}   # read-only API token (see docs/authentik.md)
 
 instances:

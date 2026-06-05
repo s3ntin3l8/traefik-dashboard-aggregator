@@ -29,7 +29,7 @@ server:
 # Default selector is {job="docker", container="traefik"}.
 # The app automatically appends ,instance="<name>" when filtering by node.
 loki:
-  url: ""                        # e.g. http://loki:3100
+  url: ${LOKI_URL:-}             # e.g. http://loki:3100
   username: ${LOKI_USER:-}
   password: ${LOKI_PASS:-}
   # labelMapping:                # optional override for the base selector
@@ -41,7 +41,7 @@ loki:
 # Needs a read-only API token (authentik: Directory → Tokens → Create, intent
 # "API"). Leave url or token empty to disable.
 authentik:
-  url: ""                        # e.g. https://authentik.example.com
+  url: ${AUTHENTIK_URL:-}        # e.g. https://authentik.example.com
   token: ${AUTHENTIK_TOKEN:-}
   # insecureSkipVerify: true     # if the API host serves a self-signed cert
 
