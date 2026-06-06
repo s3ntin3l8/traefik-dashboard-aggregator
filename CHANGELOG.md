@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v1.2.0] — 2026-06-06
 
 ### Features
 
@@ -17,6 +17,13 @@
   in `config.yaml` (see [docs/authentik.md](docs/authentik.md)); the index
   refreshes at most once per minute, keeps last-good data on errors, and never
   blocks the Traefik poll.
+
+### Changes
+
+- **`LOKI_URL` / `AUTHENTIK_URL` from the environment** — the config examples
+  and docs now reference both URLs as `${VAR:-}` loaded from `.env` (via
+  compose `env_file`), matching how the credentials already work. Unset vars
+  expand to empty, which keeps the "empty disables the feature" semantics.
 
 ---
 
