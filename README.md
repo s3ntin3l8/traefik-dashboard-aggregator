@@ -15,6 +15,11 @@ routers, services, middlewares, certificates and per-node health.
   Settings page.
 - **Logs (optional):** the Traefik API doesn't expose logs, so the Logs view
   queries a **Loki** backend instead.
+- **Authentik enrichment (optional):** routers guarded by an authentik
+  forward-auth middleware show the authentik **application / provider /
+  outpost** (and proxy mode) protecting them in the router drawer; authentik
+  middlewares get a badge, and chains are resolved transitively. Read-only API
+  token, off by default — see [docs/authentik.md](docs/authentik.md).
 
 ## Views
 
