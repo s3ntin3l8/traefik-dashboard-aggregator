@@ -155,6 +155,45 @@ The link only renders when an identity header is actually present, so local dev
 
 ---
 
+## 5. Optional: authentik enrichment in the UI
+
+Independently of being *fronted* by authentik, traefik-viewer can query the
+authentik API (read-only) to annotate what it shows: a router protected by an
+authentik forward-auth middleware gets an **Authentik** section in its detail
+drawer (application, provider, outpost, proxy mode), and the middleware itself
+is badged `authentik` in the tables and the request chain.
+
+1. In authentik: **Directory → Tokens → Create** (intent **API**), ideally
+   bound to a dedicated service account with read-only permissions.
+2. In `.env` (gitignored — `compose.yaml` loads it via `env_file`):
+
+   ```sh
+   AUTHENTIK_URL=https://authentik.example.com   # API base (serves /api/v3/)
+   AUTHENTIK_TOKEN=...
+   ```
+
+3. In `config.yaml`:
+
+   ```yaml
+   authentik:
+     url: ${AUTHENTIK_URL:-}
+     token: ${AUTHENTIK_TOKEN:-}
+     # insecureSkipVerify: true           # self-signed API cert only
+   ```
+
+How matching works (mirrors authentik's own routing): the forward-auth
+middleware only signals *authentik* (its address path contains
+`outpost.goauthentik.io`); the application is resolved from the **router's
+host** against the proxy provider's **external host** (single-app mode, exact
+match) or **cookie domain** (domain mode, longest suffix). `chain` middlewares
+— like the `strip-identity` + `authentik` chain above — are resolved
+transitively. Routers whose host matches no provider still get the badge on
+the middleware, just no application attribution.
+
+The provider list is refreshed at most once per minute; on API errors the
+last-good data is kept and the Traefik poll is unaffected. Leave `url`/`token`
+empty to disable the feature entirely (no authentik calls are made).
+
 ## Notes
 
 - authentik **2025.12.5 / 2026.2.3** dropped the non-standard `X-Original-Uri`

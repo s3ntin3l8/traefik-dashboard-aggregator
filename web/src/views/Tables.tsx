@@ -152,6 +152,21 @@ export function ServicesTable({ rows, snapshot, onSelect, selId }: { rows: Servi
   );
 }
 
+// AkBadge marks an authentik forward-auth middleware (backend sets
+// middleware.authentik when the forwardAuth address points at an outpost).
+export function AkBadge({ title, style }: { title?: string; style?: React.CSSProperties }) {
+  return (
+    <span className="ak-pill" style={style} title={title || "authentik forward-auth"}>
+      <Icons.lock size={10} /> authentik
+    </span>
+  );
+}
+
+const AK_MODE_LABEL: Record<string, string> = {
+  forward_single: "forward auth (single application)",
+  forward_domain: "forward auth (domain level)",
+};
+
 function summarizeConfig(cfg: Record<string, unknown>): string {
   if (!cfg || Object.keys(cfg).length === 0) return "—";
   return Object.entries(cfg)
@@ -168,7 +183,7 @@ export function MiddlewaresTable({ rows, snapshot, onSelect, selId }: { rows: Mi
       <div className="mcard-list">
         {sorted.map((m) => (
           <DataCard key={m.id} selected={selId === m.id} title={m.name}
-            badge={<span className="pill-soft">{m.type}</span>}
+            badge={<span className="row" style={{ gap: 6 }}><span className="pill-soft">{m.type}</span>{m.authentik && <AkBadge />}</span>}
             onClick={() => onSelect({ kind: "middleware", data: m })}
             rows={[
               { label: "Used by", value: m.usedBy > 0 ? <span className="usedby">{m.usedBy}</span> : <span className="faint">unused</span> },
@@ -196,7 +211,7 @@ export function MiddlewaresTable({ rows, snapshot, onSelect, selId }: { rows: Mi
           {sorted.map((m) => (
             <tr key={m.id} className={`drow ${selId === m.id ? "sel" : ""}`} onClick={() => onSelect({ kind: "middleware", data: m })}>
               <td><span className="cell-name">{m.name}</span></td>
-              <td><span className="pill-soft">{m.type}</span></td>
+              <td><span className="pill-soft">{m.type}</span>{m.authentik && <AkBadge style={{ marginLeft: 6 }} />}</td>
               <td className="mono faint" style={{ fontSize: 11, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summarizeConfig(m.config)}</td>
               <td>{m.usedBy > 0 ? <span className="usedby">{m.usedBy}</span> : <span className="faint">unused</span>}</td>
               <td><InstanceTag name={m.instance} snapshot={snapshot} /></td>
@@ -269,6 +284,7 @@ function RouterDetail({ r, snapshot, onSelect }: { r: Router; snapshot: Snapshot
               <span className="faint cell-mono" style={{ width: 64, fontSize: 11 }}>mw</span>
               <div className="chain-node" style={{ cursor: mw ? "pointer" : "default" }} onClick={() => mw && onSelect({ kind: "middleware", data: mw })}>
                 {m.replace(/@.*/, "")}
+                {mw?.authentik && <AkBadge style={{ marginLeft: 6 }} />}
               </div>
             </div>
           );
@@ -280,6 +296,18 @@ function RouterDetail({ r, snapshot, onSelect }: { r: Router; snapshot: Snapshot
           </div>
         </div>
       </div>
+
+      {r.authentik && (
+        <>
+          <div className="drawer-section">Authentik</div>
+          <div className="kv"><span>Application</span><span>{r.authentik.application || r.authentik.provider || "—"}</span></div>
+          {r.authentik.provider && r.authentik.provider !== r.authentik.application && (
+            <div className="kv"><span>Provider</span><span>{r.authentik.provider}</span></div>
+          )}
+          {r.authentik.outpost && <div className="kv"><span>Outpost</span><span>{r.authentik.outpost}</span></div>}
+          {r.authentik.mode && <div className="kv"><span>Mode</span><span className="pill-soft">{AK_MODE_LABEL[r.authentik.mode] || r.authentik.mode}</span></div>}
+        </>
+      )}
 
       {svc && (
         <>
@@ -324,6 +352,22 @@ function MiddlewareDetail({ m, snapshot }: { m: Middleware; snapshot: Snapshot }
       <div className="kv"><span>Used by</span><span>{m.usedBy} router{m.usedBy !== 1 ? "s" : ""}</span></div>
       <div className="kv"><span>Node</span><NodeLine snapshot={snapshot} name={m.instance} /></div>
       
+      {m.authentik && (
+        <>
+          <div className="drawer-section">Authentik</div>
+          <div className="kv"><span>Forward auth</span><AkBadge /></div>
+          <div className="kv">
+            <span>Applications</span>
+            {(m.authentik.applications || []).length > 0
+              ? <span className="usedby-list">{m.authentik.applications!.map((a) => <span className="usedby-item" key={a}>{a}</span>)}</span>
+              : <span className="muted">none matched</span>}
+          </div>
+          {(m.authentik.outposts || []).length > 0 && (
+            <div className="kv"><span>Outpost{m.authentik.outposts!.length > 1 ? "s" : ""}</span><span>{m.authentik.outposts!.join(", ")}</span></div>
+          )}
+        </>
+      )}
+
       <div className="drawer-section">Configuration</div>
       <pre className="cfg-block">{JSON.stringify(m.config || {}, null, 2)}</pre>
       {(m.usedByRouters || []).length > 0 && (

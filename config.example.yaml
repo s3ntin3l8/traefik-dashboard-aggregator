@@ -29,12 +29,21 @@ server:
 # Default selector is {job="docker", container="traefik"}.
 # The app automatically appends ,instance="<name>" when filtering by node.
 loki:
-  url: ""                        # e.g. http://loki:3100
+  url: ${LOKI_URL:-}             # e.g. http://loki:3100
   username: ${LOKI_USER:-}
   password: ${LOKI_PASS:-}
   # labelMapping:                # optional override for the base selector
   #   job: docker
   #   container: traefik
+
+# Authentik enrichment (optional). When set, routers protected by an authentik
+# forward-auth middleware show the matching application / provider / outpost.
+# Needs a read-only API token (authentik: Directory → Tokens → Create, intent
+# "API"). Leave url or token empty to disable.
+authentik:
+  url: ${AUTHENTIK_URL:-}        # e.g. https://authentik.example.com
+  token: ${AUTHENTIK_TOKEN:-}
+  # insecureSkipVerify: true     # if the API host serves a self-signed cert
 
 instances:
   # One entry per Traefik instance (gateway + each downstream node).

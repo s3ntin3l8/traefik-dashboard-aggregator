@@ -73,12 +73,12 @@ export async function fetchLogs(params: {
   return d.entries || [];
 }
 
-export async function fetchFeatures(): Promise<{ lokiEnabled: boolean }> {
+export async function fetchFeatures(): Promise<{ lokiEnabled: boolean; authentikEnabled: boolean }> {
   try {
     const r = await fetch("/api/config");
     return await r.json();
   } catch {
-    return { lokiEnabled: false };
+    return { lokiEnabled: false, authentikEnabled: false };
   }
 }
 

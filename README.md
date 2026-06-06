@@ -86,8 +86,12 @@ server:
   domain: example.com      # optional, shown in the UI
 
 loki:
-  url: ""                  # e.g. http://loki:3100 — empty disables the Logs tab
+  url: ${LOKI_URL:-}       # e.g. http://loki:3100 — empty disables the Logs tab
   labelMapping: { job: traefik }
+
+authentik:                 # optional — annotate forward-auth routers with the
+  url: ${AUTHENTIK_URL:-}  # authentik application/provider/outpost guarding them
+  token: ${AUTHENTIK_TOKEN:-}   # read-only API token (see docs/authentik.md)
 
 instances:
   - name: node-01
@@ -123,7 +127,7 @@ view). Other views work on any v3.
 - `GET /api/events` — SSE stream (snapshot on connect + on every change)
 - `GET /api/logs/query` · `GET /api/logs/tail` — Loki proxy (when configured;
   accepts an optional validated `?instance=` filter, never raw LogQL)
-- `GET /api/config` — feature flags for the SPA (e.g. `lokiEnabled`)
+- `GET /api/config` — feature flags for the SPA (e.g. `lokiEnabled`, `authentikEnabled`)
 - `GET /api/me` — identity reflected from an upstream forward-auth proxy
   (display only; empty when no proxy is in front — see [docs/authentik.md](docs/authentik.md))
 - `GET /healthz` — liveness

@@ -30,6 +30,26 @@ export interface Router {
   errors?: string[];
   priority?: number;
   url?: string;
+  authentik?: AuthentikInfo;
+}
+
+// The authentik application guarding a forward-auth-protected router,
+// resolved server-side by matching the router host against the provider's
+// external_host / cookie_domain.
+export interface AuthentikInfo {
+  application?: string;
+  slug?: string;
+  provider?: string;
+  outpost?: string;
+  mode?: string; // forward_single | forward_domain
+}
+
+// Marker + aggregated apps/outposts for an authentik forward-auth middleware.
+// Present (possibly empty) on every middleware whose address points at an
+// authentik outpost.
+export interface MiddlewareAuthentik {
+  applications?: string[];
+  outposts?: string[];
 }
 
 export interface Service {
@@ -57,6 +77,7 @@ export interface Middleware {
   usedBy: number;
   usedByRouters: string[];
   error?: string[];
+  authentik?: MiddlewareAuthentik;
 }
 
 export interface Certificate {

@@ -1,5 +1,32 @@
 # Changelog
 
+## [v1.2.0] — 2026-06-06
+
+### Features
+
+- **Authentik enrichment** — routers protected by an authentik forward-auth
+  middleware now show the authentik **application / provider / outpost** (and
+  proxy mode) guarding them in the router drawer; authentik middlewares get an
+  `authentik` badge in the tables and the request chain, and their drawer lists
+  the applications reached through them. Matching mirrors authentik's own
+  routing: the router's host is resolved against the proxy provider's
+  `external_host` (single-app mode, exact) or `cookie_domain` (domain mode,
+  longest suffix). `chain` middlewares are resolved transitively, so the common
+  `strip-identity + forwardAuth` chain pattern is attributed correctly.
+  Optional and off by default: set `authentik.url` + a **read-only** API token
+  in `config.yaml` (see [docs/authentik.md](docs/authentik.md)); the index
+  refreshes at most once per minute, keeps last-good data on errors, and never
+  blocks the Traefik poll.
+
+### Changes
+
+- **`LOKI_URL` / `AUTHENTIK_URL` from the environment** — the config examples
+  and docs now reference both URLs as `${VAR:-}` loaded from `.env` (via
+  compose `env_file`), matching how the credentials already work. Unset vars
+  expand to empty, which keeps the "empty disables the feature" semantics.
+
+---
+
 ## [v1.1.2] — 2026-06-03
 
 ### Fixes

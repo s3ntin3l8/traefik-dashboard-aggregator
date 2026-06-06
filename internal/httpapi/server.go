@@ -34,6 +34,7 @@ type Server struct {
 	sseSlot          *limiter
 	allowedInstances map[string]struct{}
 	signOutPath      string
+	authentikEnabled bool
 }
 
 // New builds the HTTP server handler set.
@@ -55,6 +56,7 @@ func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Cli
 		sseSlot:          newLimiter(maxSSEClients),
 		allowedInstances: allowed,
 		signOutPath:      signOut,
+		authentikEnabled: cfg.AuthentikEnabled(),
 	}
 }
 

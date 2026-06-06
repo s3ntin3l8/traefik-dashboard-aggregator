@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/authentik"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/traefik"
 )
@@ -17,6 +18,10 @@ type Notifier interface {
 	Broadcast()
 }
 
+// authentikTTL rate-limits authentik index refreshes (and retries after a
+// failure): the data is near-static, no need to hit the API on every poll.
+const authentikTTL = time.Minute
+
 // Poller periodically scrapes every instance and updates the store.
 type Poller struct {
 	store    *Store
@@ -25,6 +30,9 @@ type Poller struct {
 	notify   Notifier
 	log      *slog.Logger
 	polling  atomic.Bool
+
+	ak        *authentik.Client // nil when enrichment is disabled
+	akRefresh time.Time         // last refresh attempt (success or failure)
 }
 
 // NewPoller wires clients for each configured instance.
@@ -39,6 +47,7 @@ func NewPoller(cfg *config.Config, store *Store, notify Notifier, log *slog.Logg
 		interval: cfg.Server.PollInterval,
 		notify:   notify,
 		log:      log,
+		ak:       authentik.New(cfg.Authentik, cfg.Server.RequestTimeout),
 	}
 }
 
@@ -65,6 +74,8 @@ func (p *Poller) pollOnce(ctx context.Context) {
 		return
 	}
 	defer p.polling.Store(false)
+
+	p.refreshAuthentik(ctx)
 
 	results := make([]traefik.InstanceResult, len(p.clients))
 	durations := make(map[string]time.Duration, len(p.clients))
@@ -93,4 +104,21 @@ func (p *Poller) pollOnce(ctx context.Context) {
 	if changed && p.notify != nil {
 		p.notify.Broadcast()
 	}
+}
+
+// refreshAuthentik refreshes the enrichment index at most once per TTL. On
+// failure the store keeps the last-good index — enrichment degrades, the
+// traefik poll is never blocked. Only called from pollOnce (single-flight via
+// p.polling), so akRefresh needs no lock.
+func (p *Poller) refreshAuthentik(ctx context.Context) {
+	if p.ak == nil || time.Since(p.akRefresh) < authentikTTL {
+		return
+	}
+	p.akRefresh = time.Now()
+	ix, err := p.ak.Fetch(ctx)
+	if err != nil {
+		p.log.Warn("authentik refresh failed, keeping last-good index", "err", err)
+		return
+	}
+	p.store.SetAuthentik(ix)
 }
