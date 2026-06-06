@@ -45,8 +45,19 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Release bodies render like comments: every newline is a hard <br>,
+        # unlike markdown files where it's a soft break. So unwrap the
+        # changelog's 80-column continuation lines into one line per bullet
+        # (and keep blank lines, which separate the headings).
         run: |
+          notes="$(awk '/^## \[${{ github.ref_name }}\]/{found=1; next} found && /^## \[/{exit} found{print}' CHANGELOG.md \
+            | sed '/^---$/d' \
+            | awk 'function flushbuf(){if (buf != "") print buf; buf=""}
+                   /^[[:space:]]*$/ {flushbuf(); print; next}
+                   /^[[:space:]]*([-*>#]|[0-9]+\.)/ {flushbuf(); buf=$0; next}
+                   {line=$0; sub(/^[[:space:]]+/,"",line); buf=(buf=="" ? line : buf " " line)}
+                   END{flushbuf()}')"
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
-            --notes "$(awk '/^## \[${{ github.ref_name }}\]/{found=1; next} found && /^## \[/{exit} found{print}' CHANGELOG.md | sed '/^[[:space:]]*$/d;/^---$/d')" \
+            --notes "$notes" \
             --verify-tag
