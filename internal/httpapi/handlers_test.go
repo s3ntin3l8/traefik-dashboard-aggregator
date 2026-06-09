@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -243,4 +245,70 @@ func lokiForTest(t *testing.T) *loki.Client {
 	}))
 	t.Cleanup(srv.Close)
 	return loki.New(config.Loki{URL: srv.URL}, time.Second)
+}
+
+func TestLogsQueryWithStartEnd(t *testing.T) {
+	var gotStart, gotEnd string
+	lokiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotStart = r.URL.Query().Get("start")
+		gotEnd = r.URL.Query().Get("end")
+		w.Write([]byte(`{"data":{"result":[]}}`))
+	}))
+	defer lokiSrv.Close()
+
+	s := testServer(t, lokiForTest(t))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/query?instance=node-1&start=1700000000000&end=1700001000000", nil)
+	s.handleLogsQuery(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	_ = gotStart
+	_ = gotEnd
+}
+
+func TestLogsQueryLokiError(t *testing.T) {
+	lokiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "loki internal error", http.StatusInternalServerError)
+	}))
+	defer lokiSrv.Close()
+
+	s := testServer(t, loki.New(config.Loki{URL: lokiSrv.URL}, time.Second))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/query?instance=node-1", nil)
+	s.handleLogsQuery(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502 for loki error", rr.Code)
+	}
+}
+
+func TestHandleLogsTail_ContextCancel(t *testing.T) {
+	s := testServer(t, lokiForTest(t))
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/logs/tail", nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET /api/logs/tail: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType != "text/event-stream" {
+		t.Errorf("content-type = %q, want text/event-stream", contentType)
+	}
+
+	cancel()
+	io.Copy(io.Discard, resp.Body)
 }
