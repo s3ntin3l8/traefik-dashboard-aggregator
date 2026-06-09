@@ -17,26 +17,16 @@ jobs:
 
   frontend:
     name: Web (typecheck · build)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - run: npm run build
-      - run: npm run test:coverage
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./web
-          flags: frontend
+    # Pin to the feature branch until s3ntin3l8/.github PR #6 (ci-node
+    # working-directory / cache-dependency-path inputs) is merged; then
+    # change the ref to @main.
+    uses: s3ntin3l8/.github/.github/workflows/ci-node.yml@feat/ci-node-working-dir
+    with:
+      node-version: '24'
+      working-directory: web
+      cache-dependency-path: web/package-lock.json
+      test-script: test:coverage
+    secrets: inherit
 
   docker:
     name: Docker image builds
