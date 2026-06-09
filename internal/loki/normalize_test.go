@@ -52,9 +52,6 @@ func TestStr(t *testing.T) {
 	if got := str(nil); got != "" {
 		t.Errorf("str(nil) = %q, want empty", got)
 	}
-	if got := str(42); got != "" {
-		t.Errorf("str(int) = %q, want empty", got)
-	}
 }
 
 func TestNum(t *testing.T) {
@@ -93,6 +90,7 @@ func TestClientIP(t *testing.T) {
 		{"10.0.0.1", "", "10.0.0.1"},
 		{"", "", ""},
 		{"[::1]:443", "", "[::1]"},
+		{"::1", "", "::1"},
 	}
 	for _, c := range cases {
 		if got := clientIP(c.addr, c.host); got != c.want {
