@@ -150,6 +150,9 @@ func TestSnippetTraefik(t *testing.T) {
 	if !strings.HasSuffix(got, "…") {
 		t.Error("snippet(long) should end with ellipsis")
 	}
+	if got[:120] != strings.Repeat("y", 120) {
+		t.Error("snippet(long) prefix should be 120 'y' chars")
+	}
 }
 
 func TestErrNotFound(t *testing.T) {
