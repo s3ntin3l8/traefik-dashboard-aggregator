@@ -12,76 +12,31 @@ permissions:
 jobs:
   backend:
     name: Go (build · vet · test)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Stub embedded assets
-        # web/dist is gitignored (built by the frontend job / Docker). The Go
-        # package embeds it via //go:embed, so provide a placeholder here so the
-        # backend compiles/tests without a real frontend build.
-        run: mkdir -p web/dist && printf '<!doctype html><title>traefik-viewer</title>' > web/dist/index.html
-      - name: gofmt
-        run: |
-          unformatted="$(gofmt -l $(git ls-files '*.go'))"
-          if [ -n "$unformatted" ]; then
-            echo "::error::gofmt needed on:"; echo "$unformatted"; exit 1
-          fi
-      - name: go vet
-        run: go vet ./...
-      - name: go build
-        run: go build ./...
-      - name: go test
-        run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.txt
-          flags: backend
-      - name: govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          "$(go env GOPATH)/bin/govulncheck" ./...
+    uses: s3ntin3l8/.github/.github/workflows/ci-go.yml@main
+    secrets: inherit
 
   frontend:
     name: Web (typecheck · build)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - run: npm run build
-      - run: npm run test:coverage
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./web
-          flags: frontend
+    uses: s3ntin3l8/.github/.github/workflows/ci-node.yml@main
+    with:
+      node-version: '24'
+      working-directory: web
+      cache-dependency-path: web/package-lock.json
+      test-script: test:coverage
+    secrets: inherit
 
   docker:
-    name: Docker image builds
-    runs-on: ubuntu-latest
+    name: Docker image build
     needs: [backend, frontend]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v4
-      - name: Build image (no push)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: false
-          tags: traefik-viewer:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: s3ntin3l8/.github/.github/workflows/docker-publish.yml@main
+    with:
+      image-name: ${{ github.repository }}
+      # Build-only on PRs; build + push :edge (cosign-signed) on push to main.
+      push-edge: ${{ github.event_name == 'push' }}
+      # Keep PR validation fast (no arm64 emulation); full multi-arch only on edge push.
+      platforms: ${{ github.event_name == 'push' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+    secrets: inherit

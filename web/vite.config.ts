@@ -110,5 +110,14 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // junit XML feeds Codecov Test Analytics (org ci-node picks up test-results/**/*.xml).
+    reporters: ["default", ["junit", { outputFile: "test-results/junit.xml" }]],
+    coverage: {
+      provider: "v8",
+      // json-summary → coverage/coverage-summary.json (threshold + Codecov detection);
+      // lcov → Codecov coverage data.
+      reporter: ["text", "json", "json-summary", "lcov"],
+      reportsDirectory: "coverage",
+    },
   },
 });
