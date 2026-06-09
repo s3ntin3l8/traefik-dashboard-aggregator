@@ -40,7 +40,7 @@ const Icon = ({ d, size = 17, fill, stroke = 2, children, vb = 24 }: IconProps) 
 );
 
 type IP = { size?: number };
-export const Icons: Record<string, (p: IP) => JSX.Element> = {
+export const Icons: Record<string, (p: IP) => React.JSX.Element> = {
   grid: (p) => (<Icon {...p}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></Icon>),
   route: (p) => (<Icon {...p}><circle cx="6" cy="19" r="2.4" /><circle cx="18" cy="5" r="2.4" /><path d="M8.5 18.5h6a3 3 0 0 0 3-3V8M15.5 5.5h-6a3 3 0 0 0-3 3v8" /></Icon>),
   server: (p) => (<Icon {...p}><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><path d="M7 7.5h.01M7 16.5h.01" /></Icon>),
