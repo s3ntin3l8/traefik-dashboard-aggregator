@@ -9,6 +9,7 @@
 /web/node_modules/
 /web/dist/
 /web/coverage/
+/web/test-results/
 *.local
 
 # Screenshot harness deps (tools/screenshots)
