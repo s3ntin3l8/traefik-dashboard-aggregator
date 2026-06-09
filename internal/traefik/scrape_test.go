@@ -148,3 +148,19 @@ func TestHostFromRule(t *testing.T) {
 		}
 	}
 }
+
+func TestWildcardDomain(t *testing.T) {
+	cases := []struct {
+		domain, want string
+	}{
+		{"*.example.com", "*.example.com"},
+		{"sub.example.com", "*.example.com"},
+		{"example.com", "*.com"},
+		{"localhost", ""},
+	}
+	for _, c := range cases {
+		if got := wildcardDomain(c.domain); got != c.want {
+			t.Errorf("wildcardDomain(%q) = %q, want %q", c.domain, got, c.want)
+		}
+	}
+}

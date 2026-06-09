@@ -2,6 +2,7 @@ package loki
 
 import (
 	"encoding/json"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -127,10 +128,14 @@ func clientIP(addr, host string) string {
 	if host != "" {
 		return host
 	}
-	if i := strings.LastIndexByte(addr, ':'); i >= 0 {
-		return addr[:i]
+	h, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
 	}
-	return addr
+	if strings.Contains(h, ":") {
+		return "[" + h + "]"
+	}
+	return h
 }
 
 func normLevel(l string) string {

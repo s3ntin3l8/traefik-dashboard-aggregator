@@ -1,12 +1,19 @@
 package httpapi
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/loki"
 )
 
 // handleMe reflects forward-auth identity headers (e.g. authentik) for display
@@ -152,4 +159,161 @@ func TestHandleSnapshot(t *testing.T) {
 	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+}
+
+func TestHandleEvents_SendsInitialSnapshot(t *testing.T) {
+	s := testServer(t, nil)
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(srv.URL + "/api/events")
+	if err != nil {
+		t.Fatalf("GET /api/events: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/event-stream") {
+		t.Errorf("content-type = %q, want text/event-stream", ct)
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("reading first line: %v", err)
+	}
+	if !strings.HasPrefix(line, "event: snapshot") {
+		t.Errorf("first SSE event type = %q, want 'event: snapshot'", strings.TrimSpace(line))
+	}
+}
+
+func TestHandleEvents_SSECapacityExceeded(t *testing.T) {
+	s := testServer(t, nil)
+	limit := 2
+	s.sseSlot = newLimiter(limit)
+
+	for i := 0; i < limit; i++ {
+		s.sseSlot.acquire()
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	s.handleEvents(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 when at capacity", rr.Code)
+	}
+}
+
+func TestHandleLogsTail_LokiNotConfigured(t *testing.T) {
+	s := testServer(t, nil)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/tail", nil)
+	s.handleLogsTail(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 without loki", rr.Code)
+	}
+}
+
+func TestHandleLogsTail_SSECapacityExceeded(t *testing.T) {
+	lk := lokiForTest(t)
+	s := testServer(t, lk)
+	limit := 2
+	s.sseSlot = newLimiter(limit)
+
+	for i := 0; i < limit; i++ {
+		s.sseSlot.acquire()
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/tail", nil)
+	s.handleLogsTail(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 when at capacity", rr.Code)
+	}
+}
+
+func lokiForTest(t *testing.T) *loki.Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":{"result":[]}}`))
+	}))
+	t.Cleanup(srv.Close)
+	return loki.New(config.Loki{URL: srv.URL}, time.Second)
+}
+
+func TestLogsQueryWithStartEnd(t *testing.T) {
+	var gotStart, gotEnd string
+	lokiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotStart = r.URL.Query().Get("start")
+		gotEnd = r.URL.Query().Get("end")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":{"result":[]}}`))
+	}))
+	t.Cleanup(lokiSrv.Close)
+
+	s := testServer(t, loki.New(config.Loki{URL: lokiSrv.URL}, time.Second))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/query?instance=node-1&start=1700000000000&end=1700001000000", nil)
+	s.handleLogsQuery(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	if gotStart != "1700000000000000000" {
+		t.Errorf("start = %q, want 1700000000000000000", gotStart)
+	}
+	if gotEnd != "1700001000000000000" {
+		t.Errorf("end = %q, want 1700001000000000000", gotEnd)
+	}
+}
+
+func TestLogsQueryLokiError(t *testing.T) {
+	lokiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "loki internal error", http.StatusInternalServerError)
+	}))
+	defer lokiSrv.Close()
+
+	s := testServer(t, loki.New(config.Loki{URL: lokiSrv.URL}, time.Second))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/query?instance=node-1", nil)
+	s.handleLogsQuery(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502 for loki error", rr.Code)
+	}
+}
+
+func TestHandleLogsTail_ContextCancel(t *testing.T) {
+	s := testServer(t, lokiForTest(t))
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/logs/tail", nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET /api/logs/tail: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType != "text/event-stream" {
+		t.Errorf("content-type = %q, want text/event-stream", contentType)
+	}
+
+	cancel()
+	io.Copy(io.Discard, resp.Body)
 }

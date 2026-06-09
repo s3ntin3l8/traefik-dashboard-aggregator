@@ -97,3 +97,42 @@ func TestDegradedInstanceStatus(t *testing.T) {
 		t.Errorf("status = %q, want degraded", got)
 	}
 }
+
+func TestHostOnly(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"https://10.0.0.1:8080", "10.0.0.1"},
+		{"https://traefik.example.test", "traefik.example.test"},
+		{"not-a-url", "not-a-url"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := hostOnly(c.in); got != c.want {
+			t.Errorf("hostOnly(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestUsedMiddlewareCount(t *testing.T) {
+	mws := []model.Middleware{
+		{Name: "used", UsedBy: 3},
+		{Name: "unused", UsedBy: 0},
+		{Name: "also-used", UsedBy: 1},
+	}
+	if got := usedMiddlewareCount(mws); got != 2 {
+		t.Errorf("usedMiddlewareCount = %d, want 2", got)
+	}
+}
+
+func TestRouterWarnings(t *testing.T) {
+	rs := []model.Router{
+		{Name: "ok", Status: "enabled"},
+		{Name: "warn", Status: "warning"},
+		{Name: "err", Status: "error"},
+		{Name: "disabled", Status: "disabled"},
+	}
+	if got := routerWarnings(rs); got != 3 {
+		t.Errorf("routerWarnings = %d, want 3", got)
+	}
+}
