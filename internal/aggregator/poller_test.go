@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -68,10 +69,18 @@ func TestPollOnce_SkipsWhenAlreadyRunning(t *testing.T) {
 }
 
 func TestRefreshAuthentik_RespectsTTL(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"results":[]}`))
+	}))
+	defer srv.Close()
+
 	cfg := &config.Config{
 		Instances: []config.Instance{{Name: "n1", URL: "https://x"}},
 		Server:    config.Server{PollInterval: 30 * time.Second, RequestTimeout: 5 * time.Second},
-		Authentik: config.Authentik{URL: "http://authentik.invalid", Token: "tok"},
+		Authentik: config.Authentik{URL: srv.URL, Token: "tok"},
 	}
 	store := New(cfg)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -80,12 +89,10 @@ func TestRefreshAuthentik_RespectsTTL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	p.refreshAuthentik(ctx)
-
-	snapBefore := store.Snapshot()
 	p.refreshAuthentik(ctx)
-	snapAfter := store.Snapshot()
-	if snapBefore != snapAfter {
-		t.Error("refreshAuthentik should be a no-op within TTL")
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("authentik fetch calls = %d, want 1 (second call should be skipped by TTL)", got)
 	}
 }
 
