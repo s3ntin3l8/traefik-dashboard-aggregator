@@ -17,10 +17,7 @@ jobs:
 
   frontend:
     name: Web (typecheck · build)
-    # Pin to the feature branch until s3ntin3l8/.github PR #6 (ci-node
-    # working-directory / cache-dependency-path inputs) is merged; then
-    # change the ref to @main.
-    uses: s3ntin3l8/.github/.github/workflows/ci-node.yml@feat/ci-node-working-dir
+    uses: s3ntin3l8/.github/.github/workflows/ci-node.yml@main
     with:
       node-version: '24'
       working-directory: web
@@ -29,17 +26,17 @@ jobs:
     secrets: inherit
 
   docker:
-    name: Docker image builds
-    runs-on: ubuntu-latest
+    name: Docker image build
     needs: [backend, frontend]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v4
-      - name: Build image (no push)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: false
-          tags: traefik-viewer:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: s3ntin3l8/.github/.github/workflows/docker-publish.yml@main
+    with:
+      image-name: ${{ github.repository }}
+      # Build-only on PRs; build + push :edge (cosign-signed) on push to main.
+      push-edge: ${{ github.event_name == 'push' }}
+      # Keep PR validation fast (no arm64 emulation); full multi-arch only on edge push.
+      platforms: ${{ github.event_name == 'push' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+    secrets: inherit
