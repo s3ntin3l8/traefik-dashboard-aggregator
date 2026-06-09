@@ -252,11 +252,12 @@ func TestLogsQueryWithStartEnd(t *testing.T) {
 	lokiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotStart = r.URL.Query().Get("start")
 		gotEnd = r.URL.Query().Get("end")
+		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"data":{"result":[]}}`))
 	}))
-	defer lokiSrv.Close()
+	t.Cleanup(lokiSrv.Close)
 
-	s := testServer(t, lokiForTest(t))
+	s := testServer(t, loki.New(config.Loki{URL: lokiSrv.URL}, time.Second))
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/logs/query?instance=node-1&start=1700000000000&end=1700001000000", nil)
 	s.handleLogsQuery(rr, req)
@@ -264,8 +265,12 @@ func TestLogsQueryWithStartEnd(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rr.Code)
 	}
-	_ = gotStart
-	_ = gotEnd
+	if gotStart != "1700000000000000000" {
+		t.Errorf("start = %q, want 1700000000000000000", gotStart)
+	}
+	if gotEnd != "1700001000000000000" {
+		t.Errorf("end = %q, want 1700001000000000000", gotEnd)
+	}
 }
 
 func TestLogsQueryLokiError(t *testing.T) {
