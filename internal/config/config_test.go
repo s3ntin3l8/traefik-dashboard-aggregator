@@ -69,3 +69,18 @@ func TestLokiEnabled(t *testing.T) {
 		t.Error("LokiEnabled should be true")
 	}
 }
+
+func TestAuthentikEnabled(t *testing.T) {
+	c := &Config{}
+	if c.AuthentikEnabled() {
+		t.Error("AuthentikEnabled should be false with empty config")
+	}
+	c.Authentik.URL = "http://authentik:9000"
+	if c.AuthentikEnabled() {
+		t.Error("AuthentikEnabled should be false with URL only (needs token)")
+	}
+	c.Authentik.Token = "tok"
+	if !c.AuthentikEnabled() {
+		t.Error("AuthentikEnabled should be true with both URL and token")
+	}
+}

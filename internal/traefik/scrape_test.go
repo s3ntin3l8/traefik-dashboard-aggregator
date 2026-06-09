@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -145,6 +146,45 @@ func TestHostFromRule(t *testing.T) {
 	for rule, want := range cases {
 		if got := hostFromRule(rule); got != want {
 			t.Errorf("hostFromRule(%q) = %q, want %q", rule, got, want)
+		}
+	}
+}
+
+func TestClientNameAndError(t *testing.T) {
+	c := NewClient(config.Instance{Name: "gateway"}, time.Second)
+	if got := c.Name(); got != "gateway" {
+		t.Errorf("Name() = %q, want gateway", got)
+	}
+	e := errNotFound{path: "/api/tcp/middlewares"}
+	if e.Error() != "not found: /api/tcp/middlewares" {
+		t.Errorf("Error() = %q, want not found: /api/tcp/middlewares", e.Error())
+	}
+}
+
+func TestSnippet(t *testing.T) {
+	short := "hello"
+	if got := snippet([]byte(short)); got != short {
+		t.Errorf("snippet(short) = %q, want %q", got, short)
+	}
+	long := strings.Repeat("x", 200)
+	got := snippet([]byte(long))
+	if !strings.HasSuffix(got, "…") {
+		t.Error("snippet(long) should end with ellipsis")
+	}
+}
+
+func TestWildcardDomain(t *testing.T) {
+	cases := []struct {
+		domain, want string
+	}{
+		{"*.example.com", "*.example.com"},
+		{"sub.example.com", "*.example.com"},
+		{"example.com", "*.com"},
+		{"localhost", ""},
+	}
+	for _, c := range cases {
+		if got := wildcardDomain(c.domain); got != c.want {
+			t.Errorf("wildcardDomain(%q) = %q, want %q", c.domain, got, c.want)
 		}
 	}
 }
