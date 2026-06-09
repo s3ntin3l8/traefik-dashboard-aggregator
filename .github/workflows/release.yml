@@ -1,17 +1,31 @@
 name: Release
 
-# Build and publish the container image to GitHub Container Registry on release
-# tags like v1.2.3 only. Pushes to main are build-validated by ci.yml (no push),
-# so the registry isn't littered with a new image on every commit.
+# release-please maintains a release PR on every push to main. When that PR is
+# merged, release-please creates the git tag + GitHub release, sets
+# release_created=true, and the image job then builds & pushes the release image.
+#
+# Why the image push is chained here (not a separate tag-triggered workflow):
+# release-please creates the tag with the default GITHUB_TOKEN, and tags pushed by
+# GITHUB_TOKEN do NOT trigger `on: push: tags` workflows (Actions recursion guard).
+# So the image push must run in THIS run, gated on release_created and fed tag_name.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 permissions: {}
 
 jobs:
+  release-please:
+    name: Release Please
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: s3ntin3l8/.github/.github/workflows/release-please.yml@main
+
   image:
-    name: Build and push multi-arch image
+    name: Build and push release image
+    needs: [release-please]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     permissions:
       contents: read
       packages: write
@@ -20,33 +34,5 @@ jobs:
     with:
       image-name: ${{ github.repository }}
       push-release: true
-      release-tag: ${{ github.ref_name }}
+      release-tag: ${{ needs.release-please.outputs.tag_name }}
     secrets: inherit
-
-  release:
-    name: Create GitHub release
-    needs: [image]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create GitHub release with CHANGELOG notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Release bodies render like comments: every newline is a hard <br>,
-        # unlike markdown files where it's a soft break. So unwrap the
-        # changelog's 80-column continuation lines into one line per bullet
-        # (and keep blank lines, which separate the headings).
-        run: |
-          notes="$(awk '/^## \[${{ github.ref_name }}\]/{found=1; next} found && /^## \[/{exit} found{print}' CHANGELOG.md \
-            | sed '/^---$/d' \
-            | awk 'function flushbuf(){if (buf != "") print buf; buf=""}
-                   /^[[:space:]]*$/ {flushbuf(); print; next}
-                   /^[[:space:]]*([-*>#]|[0-9]+\.)/ {flushbuf(); buf=$0; next}
-                   {line=$0; sub(/^[[:space:]]+/,"",line); buf=(buf=="" ? line : buf " " line)}
-                   END{flushbuf()}')"
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }}" \
-            --notes "$notes" \
-            --verify-tag
