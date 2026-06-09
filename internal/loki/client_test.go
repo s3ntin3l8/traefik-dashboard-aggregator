@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,6 +71,63 @@ func TestQueryRangeRefusesCrossHostRedirect(t *testing.T) {
 }
 
 // SEC-1: the caller cannot request an unbounded result count.
+func TestNewReturnsNilOnEmptyURL(t *testing.T) {
+	if c := New(config.Loki{}, time.Second); c != nil {
+		t.Fatal("expected nil client for empty URL")
+	}
+}
+
+func TestSnippet(t *testing.T) {
+	short := "hello world"
+	if got := snippet([]byte(short)); got != short {
+		t.Errorf("snippet(short) = %q, want %q", got, short)
+	}
+	long := strings.Repeat("x", 200)
+	got := snippet([]byte(long))
+	if !strings.HasSuffix(got, "…") {
+		t.Error("snippet(long) should end with ellipsis")
+	}
+	if got[:160] != strings.Repeat("x", 160) {
+		t.Error("snippet(long) prefix should be 160 'x' chars")
+	}
+}
+
+func TestQueryRangeSuccess(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":{"result":[{"stream":{"instance":"gw1"},"values":[["1700000000000000000","{\"RequestMethod\":\"GET\",\"DownstreamStatus\":200}"]]}]}}`))
+	}))
+	defer srv.Close()
+
+	c := New(config.Loki{URL: srv.URL}, time.Second)
+	entries, err := c.QueryRange(context.Background(), QueryParams{})
+	if err != nil {
+		t.Fatalf("QueryRange: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	if entries[0].Method != "GET" {
+		t.Errorf("method = %q, want GET", entries[0].Method)
+	}
+	if entries[0].Status != 200 {
+		t.Errorf("status = %d, want 200", entries[0].Status)
+	}
+}
+
+func TestQueryRangeHTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := New(config.Loki{URL: srv.URL}, time.Second)
+	_, err := c.QueryRange(context.Background(), QueryParams{})
+	if err == nil {
+		t.Fatal("expected error on 500 response")
+	}
+}
+
 func TestQueryRangeClampsLimit(t *testing.T) {
 	var gotLimit, gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
