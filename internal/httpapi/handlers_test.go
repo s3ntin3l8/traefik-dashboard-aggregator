@@ -115,3 +115,41 @@ func TestTailQueryStartOverlapsPreviousWindow(t *testing.T) {
 		t.Errorf("tailQueryStart = %v, want %v", got, want)
 	}
 }
+
+func TestHandleConfig(t *testing.T) {
+	s := testServer(t, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	s.handleConfig(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var got map[string]any
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, ok := got["lokiEnabled"]; !ok {
+		t.Error("missing lokiEnabled in response")
+	}
+	if _, ok := got["authentikEnabled"]; !ok {
+		t.Error("missing authentikEnabled in response")
+	}
+}
+
+func TestHandleSnapshot(t *testing.T) {
+	s := testServer(t, nil)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/snapshot", nil)
+	s.handleSnapshot(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var got map[string]any
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+}
