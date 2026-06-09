@@ -1,5 +1,5 @@
 // TCP / UDP routers, services, middlewares + drawer. Ported from tv-tables.jsx ProtocolView.
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { Snapshot, Router, Service, Middleware } from "../lib/types";
 import { Icons, Badge, InstanceTag, NodeLine, statusKind, safeHref, useIsMobile, DataCard, instOK } from "../components/ui";
 import { HostRule } from "./Tables";

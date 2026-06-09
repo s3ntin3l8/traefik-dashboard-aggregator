@@ -1,7 +1,7 @@
 // Logs view: histogram, live tail, filters, detail drawer. Source: Loki.
 // Ported from tv-logs.jsx; the mock generator is replaced by the backend
 // /api/logs/query (window) + /api/logs/tail (SSE) endpoints.
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { Snapshot, LogEntry } from "../lib/types";
 import { Icons } from "../components/ui";
 import { fetchLogs, fetchFeatures } from "../lib/sse";
