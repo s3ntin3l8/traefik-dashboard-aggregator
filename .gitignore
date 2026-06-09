@@ -8,6 +8,7 @@
 # Frontend
 /web/node_modules/
 /web/dist/
+/web/coverage/
 *.local
 
 # Screenshot harness deps (tools/screenshots)
