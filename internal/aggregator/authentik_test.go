@@ -207,3 +207,49 @@ func TestSetAuthentikTriggersChange(t *testing.T) {
 		t.Error("unchanged index + data should not report changed again")
 	}
 }
+
+func TestIsAuthentikMiddleware(t *testing.T) {
+	mw := model.Middleware{Type: "forwardauth", Config: map[string]any{
+		"address": "http://authentik:9000/outpost.goauthentik.io/auth/traefik",
+	}}
+	if !isAuthentikMiddleware(&mw) {
+		t.Error("forwardauth with authentik address should match")
+	}
+
+	wrong := model.Middleware{Type: "forwardauth", Config: map[string]any{
+		"address": "http://oauth2-proxy:4180/auth",
+	}}
+	if isAuthentikMiddleware(&wrong) {
+		t.Error("forwardauth with non-authentik address should not match")
+	}
+
+	headers := model.Middleware{Type: "headers", Config: map[string]any{}}
+	if isAuthentikMiddleware(&headers) {
+		t.Error("non-forwardauth middleware should not match")
+	}
+}
+
+func TestToStringList(t *testing.T) {
+	cases := []struct {
+		in   any
+		want []string
+	}{
+		{[]string{"a", "b"}, []string{"a", "b"}},
+		{[]any{"a", 1, "b"}, []string{"a", "b"}},
+		{[]any{}, []string{}},
+		{nil, nil},
+		{"not a slice", nil},
+	}
+	for _, c := range cases {
+		got := toStringList(c.in)
+		if len(got) != len(c.want) {
+			t.Errorf("toStringList(%v) = %v, want %v", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("toStringList(%v)[%d] = %q, want %q", c.in, i, got[i], c.want[i])
+			}
+		}
+	}
+}
