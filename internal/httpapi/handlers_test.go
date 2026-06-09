@@ -1,12 +1,17 @@
 package httpapi
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/loki"
 )
 
 // handleMe reflects forward-auth identity headers (e.g. authentik) for display
@@ -152,4 +157,90 @@ func TestHandleSnapshot(t *testing.T) {
 	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+}
+
+func TestHandleEvents_SendsInitialSnapshot(t *testing.T) {
+	s := testServer(t, nil)
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(srv.URL + "/api/events")
+	if err != nil {
+		t.Fatalf("GET /api/events: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/event-stream") {
+		t.Errorf("content-type = %q, want text/event-stream", ct)
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("reading first line: %v", err)
+	}
+	if !strings.HasPrefix(line, "event: snapshot") {
+		t.Errorf("first SSE event type = %q, want 'event: snapshot'", strings.TrimSpace(line))
+	}
+}
+
+func TestHandleEvents_SSECapacityExceeded(t *testing.T) {
+	s := testServer(t, nil)
+	limit := 2
+	s.sseSlot = newLimiter(limit)
+
+	for i := 0; i < limit; i++ {
+		s.sseSlot.acquire()
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	s.handleEvents(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 when at capacity", rr.Code)
+	}
+}
+
+func TestHandleLogsTail_LokiNotConfigured(t *testing.T) {
+	s := testServer(t, nil)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/tail", nil)
+	s.handleLogsTail(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 without loki", rr.Code)
+	}
+}
+
+func TestHandleLogsTail_SSECapacityExceeded(t *testing.T) {
+	lk := lokiForTest(t)
+	s := testServer(t, lk)
+	limit := 2
+	s.sseSlot = newLimiter(limit)
+
+	for i := 0; i < limit; i++ {
+		s.sseSlot.acquire()
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/logs/tail", nil)
+	s.handleLogsTail(rr, req)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 when at capacity", rr.Code)
+	}
+}
+
+func lokiForTest(t *testing.T) *loki.Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":{"result":[]}}`))
+	}))
+	t.Cleanup(srv.Close)
+	return loki.New(config.Loki{URL: srv.URL}, time.Second)
 }
