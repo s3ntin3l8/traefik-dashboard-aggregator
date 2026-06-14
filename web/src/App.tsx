@@ -97,13 +97,14 @@ export function App() {
   const [fStatus, setFStatus] = useState<string | null>(null);
   const [sel, setSel] = useState<Sel | null>(null);
   const [lokiEnabled, setLokiEnabled] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
   const [me, setMe] = useState<Identity | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { fetchFeatures().then((f) => setLokiEnabled(f.lokiEnabled)); }, []);
+  useEffect(() => { fetchFeatures().then((f) => { setLokiEnabled(f.lokiEnabled); setVersion(f.version ?? null); }); }, []);
   useEffect(() => { fetchMe().then(setMe); }, []);
 
   // Reflect the active view in the tab title, e.g. "HTTP Routers · Traefik Dashboard Aggregator".
@@ -233,6 +234,7 @@ export function App() {
             <button className={t.theme === "light" ? "on" : ""} onClick={() => setTweak("theme", "light")}><Icons.sun size={14} /> Light</button>
             <button className={t.theme === "dark" ? "on" : ""} onClick={() => setTweak("theme", "dark")}><Icons.moon size={14} /> Dark</button>
           </div>
+          {version && <div className="version-label">{/^\d/.test(version) ? `v${version}` : version}</div>}
         </div>
       </aside>
 

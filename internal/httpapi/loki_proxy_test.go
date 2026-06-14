@@ -21,7 +21,7 @@ func testServer(t *testing.T, lk *loki.Client) *Server {
 	store := aggregator.New(cfg)
 	spa := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html></html>")}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return New(cfg, store, sse.New(), lk, spa, log)
+	return New(cfg, store, sse.New(), lk, spa, log, "test")
 }
 
 // B-1: a client-supplied instance that isn't a plain identifier must be

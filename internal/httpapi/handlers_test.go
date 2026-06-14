@@ -143,6 +143,9 @@ func TestHandleConfig(t *testing.T) {
 	if _, ok := got["authentikEnabled"]; !ok {
 		t.Error("missing authentikEnabled in response")
 	}
+	if got["version"] != "test" {
+		t.Errorf("version = %v, want \"test\"", got["version"])
+	}
 }
 
 func TestHandleSnapshot(t *testing.T) {

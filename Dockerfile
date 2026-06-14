@@ -16,7 +16,12 @@ RUN go mod download
 COPY . .
 # overwrite the placeholder dist with the freshly built SPA
 COPY --from=web /web/dist ./web/dist
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/traefik-viewer ./cmd/server
+# Derive the app version from the release-please manifest (in the build context;
+# the release commit/tag has it bumped) and stamp it into the binary via -ldflags.
+RUN VERSION="$(sed -n 's/.*: *"\([0-9][^"]*\)".*/\1/p' .release-please-manifest.json)"; \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath \
+      -ldflags="-s -w -X main.version=${VERSION:-dev}" \
+      -o /out/traefik-viewer ./cmd/server
 
 # --- Stage 3: minimal runtime ---
 FROM gcr.io/distroless/static-debian12:nonroot
