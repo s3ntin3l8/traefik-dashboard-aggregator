@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/compare/v1.2.0...v1.3.0) (2026-06-14)
+
+
+### Features
+
+* expose app build version via /api/config and sidebar rail ([#22](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/issues/22)) ([5071796](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/50717968a5d767c3e5472e8db62e915220dde55c))
+
+
+### Bug Fixes
+
+* remove unused React hook imports flagged by CodeQL ([4df384c](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/4df384c4ea06ca623ca73c45ed05a930c76b39ce))
+
 ## [v1.2.0] — 2026-06-06
 
 ### Features
