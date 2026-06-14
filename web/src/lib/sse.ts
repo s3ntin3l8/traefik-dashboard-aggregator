@@ -73,7 +73,7 @@ export async function fetchLogs(params: {
   return d.entries || [];
 }
 
-export async function fetchFeatures(): Promise<{ lokiEnabled: boolean; authentikEnabled: boolean }> {
+export async function fetchFeatures(): Promise<{ lokiEnabled: boolean; authentikEnabled: boolean; version?: string }> {
   try {
     const r = await fetch("/api/config");
     return await r.json();

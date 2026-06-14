@@ -35,10 +35,12 @@ type Server struct {
 	allowedInstances map[string]struct{}
 	signOutPath      string
 	authentikEnabled bool
+	version          string
 }
 
-// New builds the HTTP server handler set.
-func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Client, spa fs.FS, log *slog.Logger) *Server {
+// New builds the HTTP server handler set. version is traefik-viewer's own build
+// version (injected via -ldflags; "dev" for local builds), surfaced on /api/config.
+func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Client, spa fs.FS, log *slog.Logger, version string) *Server {
 	allowed := make(map[string]struct{}, len(cfg.Instances))
 	for _, in := range cfg.Instances {
 		allowed[in.Name] = struct{}{}
@@ -57,6 +59,7 @@ func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Cli
 		allowedInstances: allowed,
 		signOutPath:      signOut,
 		authentikEnabled: cfg.AuthentikEnabled(),
+		version:          version,
 	}
 }
 

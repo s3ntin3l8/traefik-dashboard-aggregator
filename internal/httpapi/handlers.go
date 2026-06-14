@@ -24,6 +24,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"lokiEnabled":      s.loki != nil,
 		"authentikEnabled": s.authentikEnabled,
+		"version":          s.version,
 	})
 }
 

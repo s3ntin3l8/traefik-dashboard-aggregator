@@ -21,6 +21,10 @@ import (
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/web"
 )
 
+// version is traefik-viewer's own build version, set at build time via
+// -ldflags "-X main.version=...". Defaults to "dev" for local builds.
+var version = "dev"
+
 func main() {
 	cfgPath := flag.String("config", envOr("TV_CONFIG", "/config/config.yaml"), "path to config file")
 	debug := flag.Bool("debug", os.Getenv("TV_DEBUG") != "", "enable debug logging")
@@ -42,7 +46,7 @@ func main() {
 	if *healthcheck {
 		os.Exit(runHealthcheck(cfg.Server.ListenAddr))
 	}
-	log.Info("loaded config", "instances", len(cfg.Instances), "poll", cfg.Server.PollInterval, "loki", cfg.LokiEnabled(), "authentik", cfg.AuthentikEnabled())
+	log.Info("loaded config", "version", version, "instances", len(cfg.Instances), "poll", cfg.Server.PollInterval, "loki", cfg.LokiEnabled(), "authentik", cfg.AuthentikEnabled())
 
 	store := aggregator.New(cfg)
 	hub := sse.New()
@@ -55,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := httpapi.New(cfg, store, hub, lk, spa, log)
+	srv := httpapi.New(cfg, store, hub, lk, spa, log, version)
 	httpServer := &http.Server{
 		Addr:              cfg.Server.ListenAddr,
 		Handler:           srv.Handler(),

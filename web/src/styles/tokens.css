@@ -201,6 +201,7 @@ button { font-family: inherit; cursor: pointer; }
 .sidebar-foot .user-id { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-foot .user-out { font-size: 11px; color: var(--text-faint); text-decoration: none; flex-shrink: 0; }
 .sidebar-foot .user-out:hover { color: var(--accent); }
+.sidebar-foot .version-label { margin-top: 10px; font-size: 11px; color: var(--text-faint); text-align: center; }
 .boot a { color: var(--accent); cursor: pointer; }
 
 /* main column */
@@ -849,6 +850,8 @@ body.no-scroll { overflow: hidden; }
     overflow-y: auto;
   }
   .sidebar.open { transform: none; }
+  /* version label is a desktop-only rail affordance */
+  .sidebar-foot .version-label { display: none; }
   .nav-scrim {
     display: block; position: fixed; inset: 0;
     background: rgba(0,0,0,.5); z-index: 65; animation: fade .15s forwards;
