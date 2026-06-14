@@ -135,7 +135,78 @@ it's trustworthy unless rule #2 is enforced. The app deliberately doesn't.
 
 ---
 
-## 4. Customizing / disabling the logout link
+## 4. Programmatic / API access (monitoring, automation)
+
+Forward auth protects the whole app — the SPA at `/` and every `/api/*` endpoint
+alike. A browser authenticates interactively and the SPA then calls the API with
+the resulting session cookie. A non-interactive client (a monitoring poller, a
+script, another service) can't follow that redirect flow — but it doesn't need a
+second auth system carved out of the app: authentik's outpost **accepts
+non-interactive credentials on the same host**, so the API stays behind the one
+enforcement point.
+
+> Don't move `/api/*` onto a separate basic-auth router instead. The browser SPA
+> calls those same endpoints (`/api/snapshot`, `/api/events`, `/api/me`, …) with
+> its forward-auth cookie, so splitting them out would break the UI.
+
+The `strip-identity` middleware strips inbound `X-authentik-*` headers but **not**
+`Authorization`, so the credentials below pass straight through to the outpost.
+
+### a) HTTP Basic with a service account (simplest)
+
+Create a service account in authentik (**Directory → Users**, type *Service
+account*) with an **app password** (**Directory → Tokens & App passwords**) and
+grant it access to the traefik-viewer application. Then:
+
+```sh
+curl -u "$SVC_USER:$SVC_APP_PASSWORD" \
+     -c cookies.txt -b cookies.txt \
+     https://traefik-viewer.example.com/api/snapshot
+```
+
+The password **must** be an authentik *app password* — the outpost uses it
+internally for the OAuth2 machine-to-machine flow, so an ordinary login password
+won't work.
+
+### b) Bearer JWT (explicit token lifetime)
+
+Mint a JWT with the `client_credentials` grant against the **proxy provider's**
+`client_id` (shown on the provider in the admin UI — the token must be issued
+*for* that provider), then send it as a Bearer token:
+
+```sh
+ACCESS_TOKEN=$(curl -s -X POST https://authentik.example.com/application/o/token/ \
+    -d grant_type=client_credentials \
+    -d client_id="$PROXY_PROVIDER_CLIENT_ID" \
+    -d username="$SVC_USER" \
+    -d password="$SVC_APP_PASSWORD" \
+    -d scope=openid | jq -r .access_token)
+
+curl -H "Authorization: Bearer $ACCESS_TOKEN" \
+     -c cookies.txt -b cookies.txt \
+     https://traefik-viewer.example.com/api/snapshot
+```
+
+Refresh the token before it expires. For a client that can only send HTTP Basic
+but already holds a JWT, pass it as Basic with the reserved username
+`goauthentik.io/token` and the JWT as the password.
+
+### Notes for long-running consumers
+
+- **Persist the outpost cookies** (`-c`/`-b` above, or a cookie jar in your
+  client). Without them every request re-runs the full auth flow against
+  authentik — needless load for a poller, and worse on SSE reconnects.
+- **SSE works the same way:** `/api/events` and `/api/logs/tail` are long-lived
+  GETs that carry the credential like any other request; the persisted session
+  keeps reconnections cheap.
+- The proxy provider may need the chosen method enabled. See authentik's
+  [header authentication](https://docs.goauthentik.io/add-secure-apps/providers/proxy/header_authentication/)
+  and [client credentials](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/client_credentials/)
+  docs for the provider-side toggles.
+
+---
+
+## 5. Customizing / disabling the logout link
 
 `server.signOutPath` in `config.yaml` controls the sidebar logout link:
 
@@ -155,7 +226,7 @@ The link only renders when an identity header is actually present, so local dev
 
 ---
 
-## 5. Optional: authentik enrichment in the UI
+## 6. Optional: authentik enrichment in the UI
 
 Independently of being *fronted* by authentik, traefik-viewer can query the
 authentik API (read-only) to annotate what it shows: a router protected by an
