@@ -152,11 +152,17 @@ enforcement point.
 The `strip-identity` middleware strips inbound `X-authentik-*` headers but **not**
 `Authorization`, so the credentials below pass straight through to the outpost.
 
+The two options below are the **same OAuth2 machine-to-machine
+(`client_credentials`) flow underneath** — they differ only in who runs the token
+exchange and what travels on the wire. (a) is the least code; (b) gives you a
+short-lived token and keeps the long-lived secret off the proxied app.
+
 ### a) HTTP Basic with a service account (simplest)
 
 Create a service account in authentik (**Directory → Users**, type *Service
 account*) with an **app password** (**Directory → Tokens & App passwords**) and
-grant it access to the traefik-viewer application. Then:
+grant it access to **the application that gates this host** (in domain-level mode
+that's the domain-level application — see *Scoping* below). Then:
 
 ```sh
 curl -u "$SVC_USER:$SVC_APP_PASSWORD" \
@@ -187,9 +193,16 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" \
      https://traefik-viewer.example.com/api/snapshot
 ```
 
-Refresh the token before it expires. For a client that can only send HTTP Basic
-but already holds a JWT, pass it as Basic with the reserved username
-`goauthentik.io/token` and the JWT as the password.
+Unlike (a), your client mints the JWT itself and the long-lived app password only
+ever reaches authentik's token endpoint — never the proxied app — so you control
+the token's lifetime and rotation. Refresh it before it expires. For a client that
+can only send HTTP Basic but already holds a JWT, pass it as Basic with the
+reserved username `goauthentik.io/token` and the JWT as the password.
+
+> **Domain-level forward auth:** there is only one proxy provider for the whole
+> domain, so `PROXY_PROVIDER_CLIENT_ID` is the **domain-level** provider's
+> `client_id` (the JWT must be issued for that provider). The credential is then
+> **domain-scoped**, not app-scoped — see *Scoping to a single app* below.
 
 ### Notes for long-running consumers
 
@@ -203,6 +216,33 @@ but already holds a JWT, pass it as Basic with the reserved username
   [header authentication](https://docs.goauthentik.io/add-secure-apps/providers/proxy/header_authentication/)
   and [client credentials](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/client_credentials/)
   docs for the provider-side toggles.
+
+### Scoping a credential to just this app
+
+authentik checks the **policies bound to the application being accessed**, so in
+**single-application** mode you scope a credential by binding the service account
+(or a group it's in) to the traefik-viewer application and nothing else — standard
+least privilege.
+
+**Domain-level mode is different — and it's a real limitation.** With one proxy
+provider for the whole domain, authentik
+[cannot enforce per-application access](https://docs.goauthentik.io/add-secure-apps/providers/proxy/forward_auth/):
+*"You cannot restrict individual applications to different users with separate
+application-level policies."* Authorization is shared across the domain, so any
+credential that passes the domain-level application's policy can reach **every**
+app under that domain — it is domain-scoped, not traefik-viewer-scoped. To actually
+restrict it to this app, pick one:
+
+- **Carve out a single-application provider for traefik-viewer.** Add a *Forward
+  auth (single application)* proxy provider + application for traefik-viewer's host,
+  with its own policy/group bindings limited to the service-account's group, and
+  route that host (and its `/outpost.goauthentik.io/` path) to that provider while
+  the rest of the domain stays domain-level. Now the credential is gated by
+  traefik-viewer's own bindings = true per-app scope. The JWT in (b) is then issued
+  for this single-app provider's `client_id`.
+- **Or accept domain-wide reach** and limit blast radius by other means: a
+  least-privilege service account, a short-lived app password, and network
+  restrictions. authentik won't enforce "this app only" in pure domain mode.
 
 ---
 
