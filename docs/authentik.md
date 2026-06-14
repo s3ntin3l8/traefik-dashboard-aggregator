@@ -176,9 +176,22 @@ won't work.
 
 ### b) Bearer JWT (explicit token lifetime)
 
-Mint a JWT with the `client_credentials` grant against the **proxy provider's**
-`client_id` (shown on the provider in the admin UI — the token must be issued
-*for* that provider), then send it as a Bearer token:
+**authentik setup** (one-time; mostly shared with (a) — only the last step is
+JWT-specific):
+
+1. **Service account** — Directory → Users → *Create service account*. This is the
+   machine identity the flow authenticates as.
+2. **App password** for it — Directory → Tokens & App passwords, intent
+   *App password*. This is the `password` in the token request below.
+3. **Grant it access** to the application that gates traefik-viewer's host (the
+   domain-level application in domain mode). Without this the token mints fine but
+   the outpost still denies the request.
+4. **Note the proxy provider's `client_id`** from the provider page — you create no
+   new OAuth2 application; the proxy provider already *is* the OAuth2 client, and the
+   JWT must be issued for it.
+
+Then your consuming app mints a JWT with the `client_credentials` grant against that
+`client_id` and sends it as a Bearer token:
 
 ```sh
 ACCESS_TOKEN=$(curl -s -X POST https://authentik.example.com/application/o/token/ \
