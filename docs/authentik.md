@@ -232,10 +232,25 @@ reserved username `goauthentik.io/token` and the JWT as the password.
 
 ### Scoping a credential to just this app
 
-authentik checks the **policies bound to the application being accessed**, so in
-**single-application** mode you scope a credential by binding the service account
-(or a group it's in) to the traefik-viewer application and nothing else — standard
-least privilege.
+First, a model that trips people up: authentik is
+[**default-allow**](https://docs.goauthentik.io/add-secure-apps/applications/manage_apps/)
+— *"all users can access applications when no bindings are defined on the
+application."* A freshly created service account therefore appears to reach **every**
+app, and there is no per-user "select which apps" screen. Nobody granted it access;
+the apps just aren't restricted. You restrict from the **application** side: its
+**Policy / Group / User Bindings** tab. Add one binding and the app is closed to
+everyone who doesn't match. Two consequences:
+
+- A binding restricts the app for **all** users, not just the service account — so
+  keep your human group bound alongside a dedicated service-account group (policy
+  engine mode **ANY**).
+- Apps with **zero** bindings stay open to the service account. To truly limit it to
+  traefik-viewer, every *other* app it shouldn't reach needs its own restricting
+  bindings.
+
+So in **single-application** mode you scope this credential by binding the service
+account (or a dedicated group it's in) to the traefik-viewer application — and making
+sure no other app is left unbound.
 
 **Domain-level mode is different — and it's a real limitation.** With one proxy
 provider for the whole domain, authentik
