@@ -5,19 +5,10 @@ import { Icons, Badge, InstanceTag, NodeLine, MwList, SortHead, safeHref, useIsM
 import { statusKind } from "../lib/types";
 import type { Sort } from "../components/ui";
 import type { Sel } from "../lib/sel";
+import { sortRows } from "../lib/sort";
 
 export function useSorted<T extends Record<string, any>>(rows: T[], sort: Sort): T[] {
-  return useMemo(() => {
-    const r = [...rows];
-    const dir = sort.dir === "asc" ? 1 : -1;
-    r.sort((a, b) => {
-      const av = a[sort.key];
-      const bv = b[sort.key];
-      if (typeof av === "string") return av.localeCompare(bv) * dir;
-      return ((av || 0) - (bv || 0)) * dir;
-    });
-    return r;
-  }, [rows, sort]);
+  return useMemo(() => sortRows(rows, sort), [rows, sort]);
 }
 
 export function HostRule({ rule }: { rule?: string }) {

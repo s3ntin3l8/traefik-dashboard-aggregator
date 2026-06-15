@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import type { Snapshot, Certificate } from "../lib/types";
 import { Icons, Badge, InstanceTag, SortHead, useIsMobile, DataCard, instOK } from "../components/ui";
 import type { Sort } from "../components/ui";
+import { daysUntilExpiry, certStatus, summarizeCerts } from "../lib/certificates";
 
 type CertRowData = Certificate & { days: number; cstatus: string; challenge?: string };
 
@@ -19,10 +20,9 @@ export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Sn
     if (fInstance.length) cs = cs.filter((c) => instOK(fInstance, c.instance));
     const q = (search || "").trim().toLowerCase();
     if (q) cs = cs.filter((c) => c.domain.toLowerCase().includes(q) || (c.sans || []).some((s) => s.toLowerCase().includes(q)));
-    const statusOf = (d: number) => (d < 0 ? "expired" : d <= 21 ? "expiring" : "valid");
     let r = cs.map((c) => {
-      const days = Math.floor((c.notAfter - now) / 86400000);
-      return { ...c, days, cstatus: statusOf(days) } as CertRowData;
+      const days = daysUntilExpiry(c.notAfter, now);
+      return { ...c, days, cstatus: certStatus(days) } as CertRowData;
     });
     if (fStatus) r = r.filter((c) => c.cstatus === fStatus);
     r.sort((a, b) => {
@@ -37,14 +37,7 @@ export function CertificatesView({ snapshot, search, fInstance }: { snapshot: Sn
 
   const counts = useMemo(() => {
     const cs = (snapshot.certificates || []).filter((c) => instOK(fInstance, c.instance));
-    const m = { total: cs.length, valid: 0, expiring: 0, expired: 0 };
-    cs.forEach((c) => {
-      const d = Math.floor((c.notAfter - now) / 86400000);
-      if (d < 0) m.expired++;
-      else if (d <= 21) m.expiring++;
-      else m.valid++;
-    });
-    return m;
+    return summarizeCerts(cs, now);
   }, [snapshot, fInstance, now]);
 
   return (
@@ -145,8 +138,7 @@ function CertRow({ c, snapshot, onSelect }: { c: CertRowData; snapshot: Snapshot
 }
 
 function CertDrawer({ cert, onClose }: { cert: CertRowData; onClose: () => void }) {
-  const now = Date.now();
-  const days = Math.floor((cert.notAfter - now) / 86400000);
+  const days = daysUntilExpiry(cert.notAfter, Date.now());
   const k = days < 0 ? "down" : days <= 21 ? "warn" : "ok";
   const sans = cert.sans || [];
   return (
