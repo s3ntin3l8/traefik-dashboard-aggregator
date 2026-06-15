@@ -4,6 +4,8 @@ import type { Snapshot, Instance } from "../lib/types";
 import { Icons, statusKind, timeAgo } from "../components/ui";
 import { Topology } from "./Topology";
 import type { Sel } from "../lib/sel";
+import { countUnreachable, problemRouters, degradedServices } from "../lib/overview";
+import { countExpiringSoon } from "../lib/certificates";
 
 export function Overview({ snapshot, dir, goInstance, onSelect, openTab }: {
   snapshot: Snapshot;
@@ -13,14 +15,14 @@ export function Overview({ snapshot, dir, goInstance, onSelect, openTab }: {
   openTab: (tab: string, instance?: string) => void;
 }) {
   const insts = snapshot.instances || [];
-  const unreachable = insts.filter((i) => i.status === "unreachable").length;
-  const probRouters = useMemo(() => (snapshot.httpRouters || []).filter((r) => r.status !== "enabled"), [snapshot]);
-  const probServices = useMemo(() => (snapshot.httpServices || []).filter((s) => s.serversUp < s.serversTotal), [snapshot]);
+  const unreachable = countUnreachable(insts);
+  const probRouters = useMemo(() => problemRouters(snapshot.httpRouters || []), [snapshot]);
+  const probServices = useMemo(() => degradedServices(snapshot.httpServices || []), [snapshot]);
 
   const totalR = (snapshot.httpRouters || []).length;
   const totalS = (snapshot.httpServices || []).length;
   const totalM = (snapshot.middlewares || []).length;
-  const certSoon = (snapshot.certificates || []).filter((c) => (c.notAfter - Date.now()) / 86400000 < 21).length;
+  const certSoon = countExpiringSoon(snapshot.certificates || [], Date.now());
 
   return (
     <div className="content-wide fade-in">

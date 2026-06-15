@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { Snapshot, LogEntry } from "../lib/types";
 import { Icons } from "../components/ui";
 import { fetchLogs, fetchFeatures } from "../lib/sse";
+import { filterLogs, countLogLevels, logText } from "../lib/logfilter";
 
 export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snapshot; globalSearch: string; fInstance: string[] }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -74,41 +75,16 @@ export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snap
     return () => es.close();
   }, [live, zoom, lokiEnabled, singleInstance]);
 
-  const filtered = useMemo(() => {
-    const gq = (globalSearch || "").trim().toLowerCase();
-    const lq = (q || "").trim().toLowerCase();
-    return logs.filter((l) => {
-      // Level filter
-      if (level && l.level !== level) return false;
-      // Kind filter (access vs system)
-      if (kind && l.kind !== kind) return false;
-      // Instance filter (handled by backend when single; multi-select filtered here)
-      if (fInstance.length > 0 && !fInstance.includes(l.instance)) return false;
-      // Search filters
-      const txt = logText(l).toLowerCase();
-      if (lq && !txt.includes(lq)) return false;
-      if (gq && !txt.includes(gq)) return false;
-      // Time window filter
-      if (l.ts < winStart || l.ts > winEnd) return false;
-      return true;
-    });
-  }, [logs, level, kind, fInstance, q, globalSearch, winStart, winEnd]);
+  const filtered = useMemo(
+    () => filterLogs(logs, { level, kind, instances: fInstance, search: q, globalSearch, winStart, winEnd }),
+    [logs, level, kind, fInstance, q, globalSearch, winStart, winEnd],
+  );
 
-  const counts = useMemo(() => {
-    const m: Record<string, number> = { info: 0, warning: 0, error: 0 };
-    const gq = (globalSearch || "").trim().toLowerCase();
-    const lq = (q || "").trim().toLowerCase();
-    logs.forEach((l) => {
-      if (l.ts < winStart || l.ts > winEnd) return;
-      if (kind && l.kind !== kind) return;
-      if (fInstance.length > 0 && !fInstance.includes(l.instance)) return;
-      const txt = logText(l).toLowerCase();
-      if (lq && !txt.includes(lq)) return;
-      if (gq && !txt.includes(gq)) return;
-      m[l.level] = (m[l.level] || 0) + 1;
-    });
-    return m;
-  }, [logs, kind, fInstance, q, globalSearch, winStart, winEnd]);
+  // Level chips show each level's count regardless of the active level filter.
+  const counts = useMemo(
+    () => countLogLevels(logs, { kind, instances: fInstance, search: q, globalSearch, winStart, winEnd }),
+    [logs, kind, fInstance, q, globalSearch, winStart, winEnd],
+  );
 
   if (lokiEnabled === false) {
     return (
@@ -174,11 +150,6 @@ export function LogsView({ snapshot, globalSearch, fInstance }: { snapshot: Snap
       {sel && <LogDrawer log={sel} onClose={() => setSel(null)} />}
     </div>
   );
-}
-
-function logText(l: LogEntry): string {
-  if (l.kind === "access") return `${l.method} ${l.path} ${l.status} ${l.host} ${l.clientIP} ${l.app} ${l.router} ${l.service}`;
-  return `${l.msg} ${l.app} ${JSON.stringify(l.fields || {})}`;
 }
 
 function LogHistogram({ logs, winStart, winEnd, onZoom, zoom }: { logs: LogEntry[]; winStart: number; winEnd: number; onZoom: (z: { start: number; end: number } | null) => void; zoom: { start: number; end: number } | null }) {
