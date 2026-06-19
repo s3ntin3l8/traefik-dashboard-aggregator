@@ -3,6 +3,12 @@
 // and the services table.
 import type { Snapshot, Router, Service, Server } from "./types";
 
+/** One external route: the router and the unique external IPs it points to. */
+export interface ExternalRoute {
+  router: Router;
+  ips: string[];
+}
+
 /**
  * Pull the host portion out of a server's url or address field.
  * Handles:
@@ -108,4 +114,28 @@ export function routerExternalIPs(
   const svc = findService(snapshot, router);
   if (!svc) return [];
   return externalBackends(svc, instanceIP);
+}
+
+/**
+ * Returns all external routes for a given instance (by name and IP).
+ * Collects every HTTP router belonging to the instance whose service has
+ * external backends (same /24 as instanceIP but ≠ it), in router order.
+ * Returns [] when instanceIP is not IPv4 or the instance has no external routes.
+ *
+ * Centralises the partition logic that used to be inlined in buildTopo /
+ * buildTopoV so the gateway path gets identical treatment to downstream nodes.
+ */
+export function externalRoutesFor(
+  snapshot: Snapshot,
+  instanceName: string,
+  instanceIP: string,
+): ExternalRoute[] {
+  if (!isIPv4(instanceIP)) return [];
+  const result: ExternalRoute[] = [];
+  for (const router of snapshot.httpRouters || []) {
+    if (router.instance !== instanceName) continue;
+    const ips = routerExternalIPs(router, snapshot, instanceIP);
+    if (ips.length > 0) result.push({ router, ips });
+  }
+  return result;
 }
