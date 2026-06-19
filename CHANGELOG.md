@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.0](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/compare/v1.2.0...v1.3.0) (2026-06-19)
+
+
+### Features
+
+* expose app build version via /api/config and sidebar rail ([#22](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/issues/22)) ([5071796](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/50717968a5d767c3e5472e8db62e915220dde55c))
+* highlight external routes, inline backends, label internal services ([#27](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/issues/27)) ([5d61594](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/5d61594c77ecdab76614e29e90ee1dda04cdf771))
+* **web:** expand chain middlewares inline as a recursive config tree ([#26](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/issues/26)) ([aa1e107](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/aa1e107cbf2accf27bdde5c3b1eeafe5808d49bc))
+* **web:** resolve chain middlewares to clickable member nodes ([#25](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/issues/25)) ([0f20d86](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/0f20d86acef6bfde1955d9bc2d8e1094cc7c2dd7))
+* **web:** route externals through ingress — per-source dashed boxes + bottom rail ([#28](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/issues/28)) ([61173c9](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/61173c9375dd798c55696792092169b26a85db6b))
+* **web:** topology polish — per-source external connectors, mobile spacing, ext flow packets ([#29](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/issues/29)) ([64a5b77](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/64a5b77d5290c31efbf05bbaa254d46e5f8c0e24))
+
+
+### Bug Fixes
+
+* remove unused React hook imports flagged by CodeQL ([4df384c](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/4df384c4ea06ca623ca73c45ed05a930c76b39ce))
+
 ## [v1.2.0] — 2026-06-06
 
 ### Features
