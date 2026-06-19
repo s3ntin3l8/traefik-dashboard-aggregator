@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveChainMembers } from "./chain";
+import { resolveChainMembers, resolveChainTree } from "./chain";
 import type { Middleware } from "./types";
 
 function mw(overrides: Partial<Middleware>): Middleware {
@@ -108,5 +108,109 @@ describe("resolveChainMembers", () => {
   it("preserves ordering of the member list", () => {
     const result = resolveChainMembers(basicChain, [ratelimitMw, headersMw]);
     expect(result.map((r) => r.name)).toEqual(["headers-secure", "ratelimit@file"]);
+  });
+});
+
+// ── resolveChainTree ───────────────────────────────────────────────────────────
+
+const nestedChain = mw({
+  name: "outer",
+  fullName: "outer@file",
+  type: "chain",
+  provider: "file",
+  instance: "inst",
+  config: { middlewares: ["inner-chain@file", "headers-secure@file"] },
+});
+
+const innerChain = mw({
+  name: "inner-chain",
+  fullName: "inner-chain@file",
+  type: "chain",
+  provider: "file",
+  instance: "inst",
+  config: { middlewares: ["ratelimit@file"] },
+});
+
+describe("resolveChainTree", () => {
+  it("flat chain produces leaf nodes with no children", () => {
+    const result = resolveChainTree(basicChain, [headersMw, ratelimitMw]);
+    expect(result).toHaveLength(2);
+    expect(result[0].children).toBeUndefined();
+    expect(result[0].cycle).toBeUndefined();
+    expect(result[1].children).toBeUndefined();
+  });
+
+  it("nested chain member gets a children array", () => {
+    const candidates = [innerChain, ratelimitMw, headersMw];
+    const result = resolveChainTree(nestedChain, candidates);
+    expect(result[0].mw).toBe(innerChain);
+    expect(result[0].children).toBeDefined();
+    expect(result[0].children![0].mw).toBe(ratelimitMw);
+    // second direct member is a leaf
+    expect(result[1].children).toBeUndefined();
+  });
+
+  it("cycle in chain marks the node cycle:true and does not recurse further", () => {
+    // A -> B -> A is a cycle; A is the root so its key seeds the path
+    const chainA = mw({
+      name: "chain-a",
+      fullName: "chain-a@file",
+      type: "chain",
+      provider: "file",
+      instance: "inst",
+      config: { middlewares: ["chain-b@file"] },
+    });
+    const chainB = mw({
+      name: "chain-b",
+      fullName: "chain-b@file",
+      type: "chain",
+      provider: "file",
+      instance: "inst",
+      config: { middlewares: ["chain-a@file"] },
+    });
+    const result = resolveChainTree(chainA, [chainA, chainB]);
+    // chain-b expands...
+    expect(result[0].mw).toBe(chainB);
+    expect(result[0].children).toBeDefined();
+    // ...and chain-a inside chain-b is a cycle
+    const inner = result[0].children![0];
+    expect(inner.mw).toBe(chainA);
+    expect(inner.cycle).toBe(true);
+    expect(inner.children).toBeUndefined();
+  });
+
+  it("unresolved member still appears with mw: undefined and no children", () => {
+    const result = resolveChainTree(basicChain, []); // empty candidates
+    expect(result).toHaveLength(2);
+    result.forEach((n) => {
+      expect(n.mw).toBeUndefined();
+      expect(n.children).toBeUndefined();
+    });
+  });
+
+  it("respects maxDepth: stops recursing and returns a leaf at the cap", () => {
+    const candidates = [innerChain, ratelimitMw, headersMw];
+    // depth=0 means "do not recurse into any chain members" — chains are returned as leaves
+    const result = resolveChainTree(nestedChain, candidates, 0);
+    expect(result[0].mw).toBe(innerChain);
+    expect(result[0].children).toBeUndefined();
+    expect(result[0].cycle).toBeUndefined();
+  });
+
+  it("sibling chains that are the same middleware both expand independently (no DFS bleed)", () => {
+    // outer -> [inner-chain, inner-chain] — the same chain listed twice
+    const doubleChain = mw({
+      name: "double",
+      fullName: "double@file",
+      type: "chain",
+      provider: "file",
+      instance: "inst",
+      config: { middlewares: ["inner-chain@file", "inner-chain@file"] },
+    });
+    const candidates = [innerChain, ratelimitMw];
+    const result = resolveChainTree(doubleChain, candidates);
+    // Both entries should be expanded (not treated as cycle just because the first ran)
+    expect(result[0].children).toBeDefined();
+    expect(result[1].children).toBeDefined();
   });
 });

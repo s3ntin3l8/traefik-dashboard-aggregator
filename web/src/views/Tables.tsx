@@ -6,7 +6,7 @@ import { statusKind } from "../lib/types";
 import type { Sort } from "../components/ui";
 import type { Sel } from "../lib/sel";
 import { sortRows } from "../lib/sort";
-import { resolveChainMembers } from "../lib/chain";
+import { resolveChainTree, type ChainNode } from "../lib/chain";
 
 export function useSorted<T extends Record<string, any>>(rows: T[], sort: Sort): T[] {
   return useMemo(() => sortRows(rows, sort), [rows, sort]);
@@ -159,6 +159,33 @@ const AK_MODE_LABEL: Record<string, string> = {
   forward_domain: "forward auth (domain level)",
 };
 
+// Renders a resolved chain tree as an inline, optionally-indented config list.
+// Exported so ProtocolView can reuse it (same pattern as HostRule).
+export function ChainMembers({ nodes, preClass, depth = 0 }: { nodes: ChainNode[]; preClass: string; depth?: number }) {
+  return (
+    <div style={depth > 0 ? { borderLeft: "2px solid var(--border)", paddingLeft: 12, marginLeft: 4, marginTop: 4 } : undefined}>
+      {nodes.map(({ name, mw: member, children, cycle }) => (
+        <div key={name} style={{ marginBottom: depth > 0 ? 6 : 10 }}>
+          <div className="row" style={{ gap: 6, alignItems: "center", marginBottom: 4 }}>
+            <span className="pill-soft">{member?.type ?? "unknown"}</span>
+            <span className="mono" style={{ fontSize: 12 }}>{name.replace(/@.*/, "")}</span>
+            {member?.authentik && <AkBadge style={{ marginLeft: 2 }} />}
+          </div>
+          {cycle ? (
+            <span className="faint" style={{ fontSize: 12 }}>↻ cycle — not expanded</span>
+          ) : children ? (
+            <ChainMembers nodes={children} preClass={preClass} depth={depth + 1} />
+          ) : member ? (
+            <pre className={preClass}>{JSON.stringify(member.config ?? {}, null, 2)}</pre>
+          ) : (
+            <span className="muted" style={{ fontSize: 12 }}>not found in snapshot</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function summarizeConfig(cfg: Record<string, unknown>): string {
   if (!cfg || Object.keys(cfg).length === 0) return "—";
   return Object.entries(cfg)
@@ -234,7 +261,7 @@ export function Drawer({ item, snapshot, onClose, onSelect }: { item: Sel; snaps
         <div className="drawer-body">
           {kind === "router" && <RouterDetail r={data} snapshot={snapshot} onSelect={onSelect} />}
           {kind === "service" && <ServiceDetail s={data} snapshot={snapshot} />}
-          {kind === "middleware" && <MiddlewareDetail m={data} snapshot={snapshot} onSelect={onSelect} />}
+          {kind === "middleware" && <MiddlewareDetail m={data} snapshot={snapshot} />}
           {kind === "instance" && <InstanceDetail i={data} snapshot={snapshot} />}
         </div>
       </div>
@@ -336,8 +363,8 @@ function ServiceDetail({ s, snapshot }: { s: Service; snapshot: Snapshot }) {
   );
 }
 
-function MiddlewareDetail({ m, snapshot, onSelect }: { m: Middleware; snapshot: Snapshot; onSelect: (s: Sel) => void }) {
-  const chainMembers = resolveChainMembers(m, snapshot.middlewares);
+function MiddlewareDetail({ m, snapshot }: { m: Middleware; snapshot: Snapshot }) {
+  const chainTree = resolveChainTree(m, snapshot.middlewares);
   return (
     <>
       <div className="kv"><span>Type</span><span>{m.type}</span></div>
@@ -361,24 +388,10 @@ function MiddlewareDetail({ m, snapshot, onSelect }: { m: Middleware; snapshot: 
         </>
       )}
 
-      {chainMembers.length > 0 && (
+      {chainTree.length > 0 && (
         <>
-          <div className="drawer-section">Chain</div>
-          <div className="chain">
-            {chainMembers.map(({ name, mw: member }) => (
-              <div className="chain-step" key={name}>
-                <span className="faint cell-mono" style={{ width: 64, fontSize: 11 }}>{member?.type ?? "mw"}</span>
-                <div
-                  className="chain-node"
-                  style={{ cursor: member ? "pointer" : "default" }}
-                  onClick={() => member && onSelect({ kind: "middleware", data: member })}
-                >
-                  {name.replace(/@.*/, "")}
-                  {member?.authentik && <AkBadge style={{ marginLeft: 6 }} />}
-                </div>
-              </div>
-            ))}
-          </div>
+          <div className="drawer-section">Chain members</div>
+          <ChainMembers nodes={chainTree} preClass="cfg-block" />
         </>
       )}
 
