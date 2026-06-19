@@ -2,8 +2,8 @@
 import { useState } from "react";
 import type { Snapshot, Router, Service, Middleware } from "../lib/types";
 import { Icons, Badge, InstanceTag, NodeLine, statusKind, safeHref, useIsMobile, DataCard, instOK } from "../components/ui";
-import { HostRule } from "./Tables";
-import { resolveChainMembers } from "../lib/chain";
+import { HostRule, ChainMembers } from "./Tables";
+import { resolveChainTree } from "../lib/chain";
 import type { Sel } from "../lib/sel";
 
 type Proto = "tcp" | "udp";
@@ -160,7 +160,7 @@ export function ProtocolView({ proto, kind, snapshot, search, fInstance, fStatus
 function ProtoDrawer({ item, snapshot, onClose, onSelect }: { item: Sel & { proto: Proto }; snapshot: Snapshot; onClose: () => void; onSelect: (s: Sel & { proto: Proto }) => void }) {
   const { proto, kind, data } = item;
   const clean = (n: string) => n.replace(/@.*/, "");
-  const tcpChainMembers = kind === "middleware" ? resolveChainMembers(data, snapshot.tcpMiddlewares || []) : [];
+  const tcpChainTree = kind === "middleware" ? resolveChainTree(data, snapshot.tcpMiddlewares || []) : [];
   const svcList = [...snapshot.httpServices, ...snapshot.tcpServices, ...snapshot.udpServices];
   const inst = snapshot.instances.find((i) => i.name === data.instance);
   const svc = kind === "router" ? (svcList || []).find((s) => s.instance === data.instance && clean(s.name) === clean(data.service)) : data;
@@ -219,23 +219,10 @@ function ProtoDrawer({ item, snapshot, onClose, onSelect }: { item: Sel & { prot
               <div className="kv"><span>Used by</span><span>{data.usedBy} router{data.usedBy === 1 ? "" : "s"}</span></div>
               <div className="kv"><span>Node</span><NodeLine snapshot={snapshot} name={data.instance} /></div>
               
-              {tcpChainMembers.length > 0 && (
+              {tcpChainTree.length > 0 && (
                 <>
-                  <div className="sec-label">Chain</div>
-                  <div className="chain">
-                    {tcpChainMembers.map(({ name, mw: member }) => (
-                      <div className="chain-step" key={name}>
-                        <span className="faint cell-mono" style={{ width: 64, fontSize: 11 }}>{member?.type ?? "mw"}</span>
-                        <div
-                          className="chain-node"
-                          style={{ cursor: member ? "pointer" : "default" }}
-                          onClick={() => member && onSelect({ kind: "middleware", proto, data: member })}
-                        >
-                          {name.replace(/@.*/, "")}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="sec-label">Chain members</div>
+                  <ChainMembers nodes={tcpChainTree} preClass="code" />
                 </>
               )}
               <div className="sec-label">Configuration</div>
