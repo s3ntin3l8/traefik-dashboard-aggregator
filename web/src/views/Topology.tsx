@@ -4,6 +4,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import type { Snapshot } from "../lib/types";
 import { Icons, statusKind, useIsMobile } from "../components/ui";
 import type { Sel } from "../lib/sel";
+import { routerExternalIPs } from "../lib/topo";
 
 export function Topology({ snapshot, dir, onSelect }: { snapshot: Snapshot; dir: string; onSelect: (s: Sel) => void }) {
   const wrap = useRef<HTMLDivElement>(null);
@@ -51,6 +52,7 @@ export function Topology({ snapshot, dir, onSelect }: { snapshot: Snapshot; dir:
         <div className="topo-leg"><span className="gw-circle" style={{ width: 10, height: 10, borderRadius: "50%", display: "inline-block", border: "1.6px solid var(--accent)" }}></span> gateway</div>
         <div className="topo-leg"><span className="sdot s-ok"></span> healthy node</div>
         <div className="topo-leg"><span style={{ width: 8, height: 8, borderRadius: "50%", display: "inline-block", background: "var(--ok)" }}></span> healthy route</div>
+        <div className="topo-leg"><span style={{ width: 8, height: 8, borderRadius: "50%", display: "inline-block", background: "var(--warn)" }}></span> external route</div>
       </div>
     </div>
   );
@@ -88,21 +90,44 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
     y: instY0 + i * instGap,
     k: statusKind(inst.status),
     routerCount: 0,
+    externalCount: 0,
   }));
 
   // Router constellation: a wide dot grid to the right of each node, vertically
   // centered on the node. More columns keep tall instances (e.g. 71 routers) short;
   // the grid is shifted right of the node labels and uses wider horizontal spacing.
+  // External routers (backend IP on same /24 but ≠ instance IP) are separated into
+  // a labelled column anchored at the right edge.
   const gridCols = 12;
   const dotGapX = 18;
   const dotGapY = 13;
   const dotX0 = Math.min(instX + 110, routerX - (gridCols - 1) * dotGapX);
+  // External dot column: fixed right anchor so labels (≈80px wide) stay in-frame.
+  const extDotX = W - 130;
+  const extDotGapY = 16;
+
   const routerDots: any[] = [];
+  const externalDots: any[] = [];
+
   instNodes.forEach((node) => {
-    const rs = (snapshot.httpRouters || []).filter((r) => r.instance === node.name);
-    node.routerCount = rs.length;
-    const rows = Math.ceil(rs.length / gridCols);
-    rs.forEach((r, ri) => {
+    const instIP = node.ip || "";
+    const allRouters = (snapshot.httpRouters || []).filter((r) => r.instance === node.name);
+
+    // Partition into internal (docker/same-host) and external (same /24, different IP).
+    const internal: typeof allRouters = [];
+    const external: { r: (typeof allRouters)[0]; ips: string[] }[] = [];
+    allRouters.forEach((r) => {
+      const ips = routerExternalIPs(r, snapshot, instIP);
+      if (ips.length > 0) external.push({ r, ips });
+      else internal.push(r);
+    });
+
+    node.routerCount = internal.length;
+    node.externalCount = external.length;
+
+    // Internal grid: same layout as before.
+    const rows = Math.ceil(internal.length / gridCols);
+    internal.forEach((r, ri) => {
       routerDots.push({
         ...r,
         x: dotX0 + (ri % gridCols) * dotGapX,
@@ -111,12 +136,26 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
         k: statusKind(r.status),
       });
     });
+
+    // External stack: one dot per router, vertically centred on the node, with IP label.
+    const extTotal = external.length;
+    external.forEach(({ r, ips }, ei) => {
+      externalDots.push({
+        ...r,
+        ips,
+        x: extDotX,
+        y: node.y - ((extTotal - 1) * extDotGapY) / 2 + ei * extDotGapY,
+        node,
+        k: statusKind(r.status),
+      });
+    });
   });
-  return { gateway, instNodes, routerDots, dotX0, gridCols, dotGapX, dotGapY };
+
+  return { gateway, instNodes, routerDots, externalDots, dotX0, extDotX, gridCols, dotGapX, dotGapY };
 }
 
 function TopoEdges({ model }: { model: TopoModel }) {
-  const { gateway, instNodes, dotX0 } = model;
+  const { gateway, instNodes, dotX0, extDotX } = model;
   return (
     <g className="topo-edges">
       {instNodes.map((n) => (
@@ -125,12 +164,15 @@ function TopoEdges({ model }: { model: TopoModel }) {
       {instNodes.filter((n) => n.routerCount > 0).map((n) => (
         <path key={"conn" + n.name} d={`M${n.x + 14},${n.y} H${dotX0 - 8}`} fill="none" stroke={`var(--${n.k})`} strokeWidth="1" strokeOpacity="0.4" strokeDasharray="2 3" />
       ))}
+      {instNodes.filter((n) => n.externalCount > 0).map((n) => (
+        <path key={"extconn" + n.name} d={`M${n.x + 14},${n.y} H${extDotX - 10}`} fill="none" stroke="var(--warn)" strokeWidth="1" strokeOpacity="0.35" strokeDasharray="4 3" />
+      ))}
     </g>
   );
 }
 
 function TopoNodes({ model, onSelect }: { model: TopoModel; onSelect: (s: Sel) => void }) {
-  const { gateway, instNodes, routerDots, dotX0, gridCols, dotGapX, dotGapY } = model;
+  const { gateway, instNodes, routerDots, externalDots, dotX0, gridCols, dotGapX, dotGapY } = model;
   return (
     <g>
       <g
@@ -167,6 +209,16 @@ function TopoNodes({ model, onSelect }: { model: TopoModel; onSelect: (s: Sel) =
           <title>{r.name}</title>
         </circle>
       ))}
+      {/* External router dots: separate column with IP labels */}
+      {externalDots.map((r: any, i: number) => (
+        <g key={"ext" + i} className="rdot" onClick={() => onSelect({ kind: "router", data: r })} style={{ cursor: "pointer" }}>
+          <circle cx={r.x} cy={r.y} r="3.5" className={`rdot-ext rdot-${r.k}`} />
+          <text x={r.x + 8} y={r.y + 3.5} className="ext-dot-label">
+            {r.ips[0]}
+          </text>
+          <title>{r.shortName} → {r.ips.join(", ")}</title>
+        </g>
+      ))}
     </g>
   );
 }
@@ -190,25 +242,61 @@ function buildTopoV(snapshot: Snapshot, W: number) {
   const headerGap = 64;      // gap from gateway down to the first node
   const labelH = 34;         // node marker + 2 label lines
   const sectionPad = 24;     // breathing room below each node's dots
+  const extRowH = 16;        // height per external router row (dot + IP label)
 
   let y = gy + headerGap;
   const instNodes = insts.map((inst) => {
-    const rs = (snapshot.httpRouters || []).filter((r) => r.instance === inst.name);
-    const rows = Math.max(1, Math.ceil(rs.length / cols));
+    const instIP = inst.ip || "";
+    const allRouters = (snapshot.httpRouters || []).filter((r) => r.instance === inst.name);
+
+    // Partition routers into internal (grid) and external (labelled rows).
+    const internal: typeof allRouters = [];
+    const extEntries: { r: (typeof allRouters)[0]; ips: string[] }[] = [];
+    allRouters.forEach((r) => {
+      const ips = routerExternalIPs(r, snapshot, instIP);
+      if (ips.length > 0) extEntries.push({ r, ips });
+      else internal.push(r);
+    });
+
+    const rows = Math.max(1, Math.ceil(internal.length / cols));
     const nodeY = y;
     const dotsY0 = nodeY + labelH;
-    const dots = rs.map((r, ri) => ({
+    const dots = internal.map((r, ri) => ({
       ...r,
       x: dotX0 + (ri % cols) * dotGapX,
       y: dotsY0 + Math.floor(ri / cols) * dotGapY,
       k: statusKind(r.status),
     }));
-    const node = { ...inst, x: nodeX, y: nodeY, k: statusKind(inst.status), routerCount: rs.length, dots, rows, dotsY0 };
-    y += labelH + rows * dotGapY + sectionPad;
+
+    // External rows sit immediately below the internal dot grid.
+    const extY0 = dotsY0 + rows * dotGapY + 4;
+    const extDots = extEntries.map(({ r, ips }, ei) => ({
+      ...r,
+      ips,
+      x: dotX0,
+      y: extY0 + ei * extRowH,
+      k: statusKind(r.status),
+    }));
+
+    const node = {
+      ...inst,
+      x: nodeX,
+      y: nodeY,
+      k: statusKind(inst.status),
+      routerCount: internal.length,
+      externalCount: extEntries.length,
+      dots,
+      extDots,
+      rows,
+      dotsY0,
+    };
+    // Advance cursor accounting for both internal grid and external rows.
+    y += labelH + rows * dotGapY + (extEntries.length > 0 ? 4 + extEntries.length * extRowH : 0) + sectionPad;
     return node;
   });
   const routerDots = instNodes.flatMap((n) => n.dots.map((d: any) => ({ ...d, node: n })));
-  return { gateway, instNodes, routerDots, dotX0, nodeLabelX, cols, dotGapX, dotGapY, totalH: y + 6 };
+  const externalDots = instNodes.flatMap((n) => n.extDots.map((d: any) => ({ ...d, node: n })));
+  return { gateway, instNodes, routerDots, externalDots, dotX0, nodeLabelX, cols, dotGapX, dotGapY, totalH: y + 6 };
 }
 
 function VTopoEdges({ model }: { model: VTopoModel }) {
@@ -224,7 +312,7 @@ function VTopoEdges({ model }: { model: VTopoModel }) {
 }
 
 function VTopoNodes({ model, onSelect }: { model: VTopoModel; onSelect: (s: Sel) => void }) {
-  const { gateway: g, instNodes, routerDots, nodeLabelX } = model;
+  const { gateway: g, instNodes, routerDots, externalDots, nodeLabelX } = model;
   // match the node's icon-to-text gap (node r13 → label at nodeLabelX; gateway r16 → +3)
   const gwLabelX = nodeLabelX + 3;
   return (
@@ -252,6 +340,16 @@ function VTopoNodes({ model, onSelect }: { model: VTopoModel; onSelect: (s: Sel)
         <circle key={i} className={`rdot rdot-${r.k}`} cx={r.x} cy={r.y} r="4" onClick={() => onSelect({ kind: "router", data: r })}>
           <title>{r.name}</title>
         </circle>
+      ))}
+      {/* External router rows: dot + IP label, stacked below each node's grid */}
+      {externalDots.map((r: any, i: number) => (
+        <g key={"vext" + i} className="rdot" onClick={() => onSelect({ kind: "router", data: r })} style={{ cursor: "pointer" }}>
+          <circle cx={r.x} cy={r.y} r="4" className={`rdot-ext rdot-${r.k}`} />
+          <text x={r.x + 10} y={r.y + 3.5} className="ext-dot-label">
+            {r.ips[0]}
+          </text>
+          <title>{r.shortName} → {r.ips.join(", ")}</title>
+        </g>
       ))}
     </g>
   );

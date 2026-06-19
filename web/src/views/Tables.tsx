@@ -1,12 +1,19 @@
 // HTTP tables (routers/services/middlewares) + detail drawer. Ported from tv-tables.jsx.
 import { useState, useMemo } from "react";
-import type { Snapshot, Router, Service, Middleware } from "../lib/types";
+import type { Snapshot, Router, Service, Middleware, Server } from "../lib/types";
 import { Icons, Badge, InstanceTag, NodeLine, MwList, SortHead, safeHref, useIsMobile, DataCard } from "../components/ui";
 import { statusKind } from "../lib/types";
 import type { Sort } from "../components/ui";
 import type { Sel } from "../lib/sel";
 import { sortRows } from "../lib/sort";
 import { resolveChainTree, type ChainNode } from "../lib/chain";
+import { externalBackends, hostFromServer, findService } from "../lib/topo";
+
+/** Format a server url/address for compact display (strips scheme). */
+function displayAddr(sv: Server): string {
+  const raw = sv.url || sv.address || "";
+  try { return new URL(raw).host; } catch { return raw; }
+}
 
 export function useSorted<T extends Record<string, any>>(rows: T[], sort: Sort): T[] {
   return useMemo(() => sortRows(rows, sort), [rows, sort]);
@@ -94,16 +101,30 @@ export function ServicesTable({ rows, snapshot, onSelect, selId }: { rows: Servi
   if (isMobile) {
     return (
       <div className="mcard-list">
-        {sorted.map((s) => (
-          <DataCard key={s.id} selected={selId === s.id} status={s.status} title={s.shortName}
-            onClick={() => onSelect({ kind: "service", data: s })}
-            rows={[
-              { label: "Type", value: <span className="pill-soft">{s.type}</span> },
-              { label: "Servers", value: <span className={`srv-up${s.serversUp < s.serversTotal ? " warn" : ""}`}>{s.serversUp}/{s.serversTotal}</span> },
-              { label: "Node", value: <InstanceTag name={s.instance} snapshot={snapshot} /> },
-            ]}
-          />
-        ))}
+        {sorted.map((s) => {
+          const instIP = snapshot.instances.find((i) => i.name === s.instance)?.ip ?? "";
+          const extIPs = new Set(externalBackends(s, instIP));
+          return (
+            <DataCard key={s.id} selected={selId === s.id} status={s.status} title={s.shortName}
+              onClick={() => onSelect({ kind: "service", data: s })}
+              rows={[
+                { label: "Type", value: <span className="pill-soft">{s.type}</span> },
+                {
+                  label: "Backends",
+                  value: (s.servers || []).length === 0
+                    ? <span className="faint">—</span>
+                    : <span className="cell-mono">
+                        {displayAddr(s.servers[0])}
+                        {extIPs.has(hostFromServer(s.servers[0]) ?? "") && <span className="pill-ext" style={{ marginLeft: 5 }}>ext</span>}
+                        {s.servers.length > 1 ? <span className="faint"> +{s.servers.length - 1}</span> : null}
+                      </span>,
+                },
+                { label: "Servers", value: <span className={`srv-up${s.serversUp < s.serversTotal ? " warn" : ""}`}>{s.serversUp}/{s.serversTotal}</span> },
+                { label: "Node", value: <InstanceTag name={s.instance} snapshot={snapshot} /> },
+              ]}
+            />
+          );
+        })}
         {sorted.length === 0 && <div className="empty-row">No services match.</div>}
       </div>
     );
@@ -115,28 +136,49 @@ export function ServicesTable({ rows, snapshot, onSelect, selId }: { rows: Servi
           <tr>
             <SortHead col="name" label="Service" sort={sort} setSort={setSort} />
             <th>Type</th>
+            <th>Backends</th>
             <th>Servers</th>
-            <th>Load balancer</th>
             <SortHead col="instance" label="Node" sort={sort} setSort={setSort} />
             <SortHead col="status" label="Status" sort={sort} setSort={setSort} align="right" />
           </tr>
         </thead>
         <tbody>
-          {sorted.map((s) => (
-            <tr key={s.id} className={`drow ${selId === s.id ? "sel" : ""}`} onClick={() => onSelect({ kind: "service", data: s })}>
-              <td><span className="cell-name">{s.shortName}</span></td>
-              <td><span className="pill-soft">{s.type}</span></td>
-              <td>
-                <span className="srv-health">
-                  <span className={`srv-up ${s.serversUp < s.serversTotal ? "warn" : ""}`}>{s.serversUp}/{s.serversTotal}</span>
-                  <span className="srv-bar">{Array.from({ length: s.serversTotal }).map((_, i) => <span key={i} className={`srv-seg ${i < s.serversUp ? "up" : "down"}`}></span>)}</span>
-                </span>
-              </td>
-              <td className="mono faint" style={{ fontSize: 11 }}>round-robin</td>
-              <td><InstanceTag name={s.instance} snapshot={snapshot} /></td>
-              <td style={{ textAlign: "right" }}><Badge status={s.status} /></td>
-            </tr>
-          ))}
+          {sorted.map((s) => {
+            const instIP = snapshot.instances.find((i) => i.name === s.instance)?.ip ?? "";
+            const extIPs = new Set(externalBackends(s, instIP));
+            return (
+              <tr key={s.id} className={`drow ${selId === s.id ? "sel" : ""}`} onClick={() => onSelect({ kind: "service", data: s })}>
+                <td><span className="cell-name">{s.shortName}</span></td>
+                <td><span className="pill-soft">{s.type}</span></td>
+                <td>
+                  <div className="backends-cell">
+                    {(s.servers || []).length === 0
+                      ? <span className="faint">—</span>
+                      : (s.servers || []).map((sv, i) => {
+                          const host = hostFromServer(sv);
+                          const isExt = host ? extIPs.has(host) : false;
+                          return (
+                            <span key={i} className="backend-row">
+                              <span className={`sdot ${sv.status === "DOWN" ? "s-down" : "s-ok"}`}></span>
+                              <span className={`backend-addr${isExt ? " ext" : ""}`}>{displayAddr(sv)}</span>
+                              {isExt && <span className="pill-ext">ext</span>}
+                            </span>
+                          );
+                        })
+                    }
+                  </div>
+                </td>
+                <td>
+                  <span className="srv-health">
+                    <span className={`srv-up ${s.serversUp < s.serversTotal ? "warn" : ""}`}>{s.serversUp}/{s.serversTotal}</span>
+                    <span className="srv-bar">{Array.from({ length: s.serversTotal }).map((_, i) => <span key={i} className={`srv-seg ${i < s.serversUp ? "up" : "down"}`}></span>)}</span>
+                  </span>
+                </td>
+                <td><InstanceTag name={s.instance} snapshot={snapshot} /></td>
+                <td style={{ textAlign: "right" }}><Badge status={s.status} /></td>
+              </tr>
+            );
+          })}
           {sorted.length === 0 && <tr><td colSpan={6} className="empty-row">No services match.</td></tr>}
         </tbody>
       </table>
@@ -270,9 +312,7 @@ export function Drawer({ item, snapshot, onClose, onSelect }: { item: Sel; snaps
 }
 
 function RouterDetail({ r, snapshot, onSelect }: { r: Router; snapshot: Snapshot; onSelect: (s: Sel) => void }) {
-  const clean = (n: string) => n.replace(/@.*/, "");
-  const svc = [...snapshot.httpServices, ...snapshot.tcpServices, ...snapshot.udpServices]
-    .find((s) => clean(s.name) === clean(r.service) && s.instance === r.instance);
+  const svc = findService(snapshot, r);
   const inst = snapshot.instances.find((i) => i.name === r.instance);
   return (
     <>

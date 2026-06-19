@@ -107,3 +107,20 @@ func TestKeySizeSuffix(t *testing.T) {
 		t.Errorf("keySizeSuffix(ECDSA, 0) = %q, want %q", got, "ECDSA")
 	}
 }
+
+func TestServiceType(t *testing.T) {
+	cases := []struct {
+		rawType, provider, want string
+	}{
+		{"loadbalancer", "docker", "loadbalancer"}, // normal service — pass through
+		{"weighted", "internal", "weighted"},       // explicit type wins even for internal
+		{"", "docker", ""},                         // no type, non-internal → empty
+		{"", "internal", "internal"},               // api@internal, dashboard@internal, etc.
+		{"", "file", ""},                           // non-internal with no type → empty
+	}
+	for _, c := range cases {
+		if got := serviceType(c.rawType, c.provider); got != c.want {
+			t.Errorf("serviceType(%q, %q) = %q, want %q", c.rawType, c.provider, got, c.want)
+		}
+	}
+}

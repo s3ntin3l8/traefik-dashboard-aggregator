@@ -86,6 +86,16 @@ func providerOf(name, fallback string) string {
 	return fallback
 }
 
+// serviceType returns the service type, defaulting to "internal" for Traefik's
+// built-in services (api@internal, dashboard@internal, prometheus@internal,
+// etc.) which the API reports with an empty type field.
+func serviceType(rawType, provider string) string {
+	if rawType == "" && provider == "internal" {
+		return "internal"
+	}
+	return rawType
+}
+
 // hostFromRule extracts the first Host(`...`) / HostSNI(`...`) value.
 func hostFromRule(rule string) string {
 	if m := hostRuleRe.FindStringSubmatch(rule); m != nil {
