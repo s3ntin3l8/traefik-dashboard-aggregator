@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { hostFromServer, isIPv4, sameSubnet24, externalBackends, findService } from "./topo";
-import type { Service, Server, Snapshot } from "./types";
+import { hostFromServer, isIPv4, sameSubnet24, externalBackends, findService, externalRoutesFor } from "./topo";
+import type { Service, Server, Snapshot, Router } from "./types";
 
 // ---------------------------------------------------------------------------
 // hostFromServer
@@ -243,5 +243,85 @@ describe("findService", () => {
       status: "enabled" as const,
     };
     expect(findService(snap, router)?.shortName).toBe("whoami");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// externalRoutesFor
+// ---------------------------------------------------------------------------
+function makeRouter(overrides: Partial<Router> & { instance: string; service: string }): Router {
+  return {
+    id: `${overrides.instance}:app@docker`,
+    name: "app@docker",
+    shortName: "app",
+    middlewares: [],
+    entryPoints: [],
+    tls: false,
+    provider: "docker",
+    status: "enabled" as const,
+    ...overrides,
+  };
+}
+
+describe("externalRoutesFor", () => {
+  const instIP = "192.168.100.10";
+
+  it("returns [] when instanceIP is not IPv4", () => {
+    const snap = makeSnapshot({});
+    expect(externalRoutesFor(snap, "node1", "traefik-host")).toEqual([]);
+  });
+
+  it("returns [] when the instance has no routers", () => {
+    const snap = makeSnapshot({ httpRouters: [] });
+    expect(externalRoutesFor(snap, "node1", instIP)).toEqual([]);
+  });
+
+  it("returns [] when routers point only to internal/docker backends", () => {
+    const svc: Service = { ...makeSvc([{ url: "http://172.18.0.5:80", status: "UP" }]), instance: "node1" };
+    const router = makeRouter({ instance: "node1", service: svc.name });
+    const snap = makeSnapshot({ httpRouters: [router], httpServices: [svc] });
+    expect(externalRoutesFor(snap, "node1", instIP)).toEqual([]);
+  });
+
+  it("returns the external route with its ip array", () => {
+    const svc: Service = { ...makeSvc([{ url: "http://192.168.100.50:80", status: "UP" }]), instance: "node1" };
+    const router = makeRouter({ instance: "node1", service: svc.name });
+    const snap = makeSnapshot({ httpRouters: [router], httpServices: [svc] });
+    const result = externalRoutesFor(snap, "node1", instIP);
+    expect(result).toHaveLength(1);
+    expect(result[0].router).toBe(router);
+    expect(result[0].ips).toEqual(["192.168.100.50"]);
+  });
+
+  it("filters out routers belonging to a different instance", () => {
+    const svc: Service = { ...makeSvc([{ url: "http://192.168.100.50:80", status: "UP" }]), instance: "node2" };
+    const router = makeRouter({ instance: "node2", service: svc.name });
+    const snap = makeSnapshot({ httpRouters: [router], httpServices: [svc] });
+    expect(externalRoutesFor(snap, "node1", instIP)).toEqual([]);
+  });
+
+  it("separates external from internal routers for the same instance", () => {
+    // Services must share the same instance as the routers so findService can match.
+    const extSvc: Service = { ...makeSvc([{ url: "http://192.168.100.50:80", status: "UP" }]), name: "ext@docker", id: "node1:ext@docker", instance: "node1" };
+    const intSvc: Service = { ...makeSvc([{ url: "http://172.18.0.5:80", status: "UP" }]), name: "int@docker", id: "node1:int@docker", instance: "node1" };
+    const extRouter = makeRouter({ id: "node1:ext@docker", instance: "node1", service: "ext@docker", shortName: "ext", name: "ext@docker" });
+    const intRouter = makeRouter({ id: "node1:int@docker", instance: "node1", service: "int@docker", shortName: "int", name: "int@docker" });
+    const snap = makeSnapshot({
+      httpRouters: [extRouter, intRouter],
+      httpServices: [extSvc, intSvc],
+    });
+    const result = externalRoutesFor(snap, "node1", instIP);
+    expect(result).toHaveLength(1);
+    expect(result[0].router.shortName).toBe("ext");
+  });
+
+  it("works for a gateway instance with its own external routes", () => {
+    const gwIP = "192.168.100.1";
+    const svc: Service = { ...makeSvc([{ url: "http://192.168.100.99:80", status: "UP" }]), instance: "gw" };
+    const router = makeRouter({ instance: "gw", service: svc.name });
+    const snap = makeSnapshot({ httpRouters: [router], httpServices: [svc] });
+    const result = externalRoutesFor(snap, "gw", gwIP);
+    expect(result).toHaveLength(1);
+    expect(result[0].ips).toEqual(["192.168.100.99"]);
   });
 });

@@ -755,6 +755,9 @@ button { font-family: inherit; cursor: pointer; }
 /* External router dots: amber fill with ring, independent of health colour */
 .rdot-ext { fill: var(--warn); color: var(--warn); stroke: var(--warn); stroke-width: 1.5; stroke-opacity: 0.45; }
 .ext-dot-label { font-size: 9px; fill: var(--warn); font-family: var(--table-mono, monospace); }
+/* Per-source dashed external group boxes */
+.ext-box { fill: none; stroke: var(--warn); stroke-opacity: 0.45; stroke-dasharray: 4 3; rx: 5; }
+.ext-box-title { font-size: 9px; fill: var(--warn); opacity: 0.7; font-weight: 600; }
 .packet { filter: drop-shadow(0 0 3px currentColor); }
 .p-ok { fill: var(--ok); } .p-warn { fill: var(--warn); } .p-down { fill: var(--down); }
 
