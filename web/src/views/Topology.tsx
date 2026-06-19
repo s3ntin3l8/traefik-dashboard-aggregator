@@ -106,9 +106,13 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
   const gridCols = 12;
   const dotGapX = 18;
   const dotGapY = 13;
-  // Right gutter is reserved for the external boxes; keep the grid well left of it.
-  const boxW = 148; // reserved column width for external boxes
-  const dotX0 = Math.min(instX + 110, W - boxW - 16 - (gridCols - 1) * dotGapX);
+  // Right gutter is reserved for the external boxes + vertical bus; keep the grid clear of both.
+  const boxW = 148;          // reserved column width for external boxes
+  const boxRightMargin = 20; // breathing room between card edge and boxes
+  const busGap = 14;         // gap between box left edge and the vertical bus line
+  const busClear = 12;       // minimum gap between grid right edge and bus
+  // Invariant at W=860: dotX0 + (gridCols-1)*dotGapX < busX — verified ≈666 < 678
+  const dotX0 = Math.min(instX + 110, W - boxW - boxRightMargin - busGap - busClear - (gridCols - 1) * dotGapX);
 
   const routerDots: any[] = [];
 
@@ -142,7 +146,8 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
   const titleH = 18;      // height of the box title row
   const boxPad = 6;       // vertical padding inside the box (top + bottom)
   const boxGap = 8;       // vertical gap between boxes
-  const boxX = W - boxW - 4; // left edge of all boxes (right-anchored)
+  const boxX = W - boxW - boxRightMargin; // left edge of all boxes (right-anchored)
+  const busX = boxX - busGap;             // vertical bus at left of box region
 
   // Collect per-source external route lists (node order then gateway).
   const sources: { label: string; routes: ReturnType<typeof externalRoutesFor> }[] = [];
@@ -176,20 +181,29 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
 
   const boxStackBottom = boxTop - boxGap + 12;
   const height = Math.max(H, boxStackBottom);
+  const railY = height - 14;
+  const railStartY = gateway.y + 56;
+  const rail = { startY: railStartY, railY, busX };
 
-  return { gateway, instNodes, routerDots, boxes, dotX0, gridCols, dotGapX, dotGapY, height };
+  // One polyline per external box: the exact path packets travel (gateway → rail → bus → box mid).
+  const extPaths: [number, number][][] = boxes.map((b) => {
+    const my = b.y + b.h / 2;
+    return [[gateway.x, railStartY], [gateway.x, railY], [busX, railY], [busX, my], [b.x, my]];
+  });
+
+  return { gateway, instNodes, routerDots, boxes, dotX0, gridCols, dotGapX, dotGapY, height, rail, extPaths };
 }
 
-function TopoEdges({ model, height }: { model: TopoModel; height: number }) {
-  const { gateway, instNodes, dotX0, boxes } = model;
-  // Bottom rail: drops from gateway (starting below its name/ip labels at ~y+52),
-  // runs along the bottom edge, then rises to the LAST (bottommost) box.
-  // The last box is the gateway's own external box when present, matching the ASCII viz.
-  const railStartY = gateway.y + 56;  // clear of gw circle (r22) + two label lines (~y+49)
-  const railY = height - 14;
-  const lastBox = boxes[boxes.length - 1];
-  const railTargetX = lastBox ? lastBox.x - 4 : 0;
-  const railTargetY = lastBox ? lastBox.y + lastBox.h / 2 : railY;
+function TopoEdges({ model, height: _height }: { model: TopoModel; height: number }) {
+  const { gateway, instNodes, dotX0, boxes, rail } = model;
+  // Bus path: trunk from gateway down to rail channel, right to busX, then up to the topmost
+  // box mid-Y (all boxes lie between), with per-box horizontal stubs branching to each box.
+  // Single <path> with subpaths so amber opacity doesn't compound at intersections.
+  const midY = (b: ExtBox) => b.y + b.h / 2;
+  const busPath = boxes.length > 0
+    ? `M${gateway.x},${rail.startY} V${rail.railY} H${rail.busX} V${midY(boxes[0])}` +
+      boxes.map((b) => ` M${rail.busX},${midY(b)} H${b.x}`).join("")
+    : "";
   return (
     <g className="topo-edges">
       {instNodes.map((n) => (
@@ -200,7 +214,7 @@ function TopoEdges({ model, height }: { model: TopoModel; height: number }) {
       ))}
       {boxes.length > 0 && (
         <path
-          d={`M${gateway.x},${railStartY} V${railY} H${railTargetX} V${railTargetY}`}
+          d={busPath}
           fill="none" stroke="var(--warn)" strokeWidth="1.2" strokeOpacity="0.45"
           strokeDasharray="5 3" strokeLinejoin="round"
         />
@@ -305,18 +319,20 @@ function buildTopoV(snapshot: Snapshot, W: number) {
   const boxRowH = 16, boxTitleH = 18, boxPad = 6, boxMarginTop = 6;
   const boxX = dotX0, boxW = Math.min(W - dotX0 - 8, 148);
 
-  // Gateway external box — rendered above the node list, just below the gw header.
-  let y = gy + headerGap;
+  // Gateway external box — sits tight below the gw header, then a full sectionPad before the
+  // first node (matching the gap between any two nodes) so there's no title overlap.
+  let y = gy + headerGap; // default first-node Y when no gwExtBox (unchanged)
   const gwExtRoutes = gw ? externalRoutesFor(snapshot, gw.name, gw.ip || "") : [];
   let gwExtBox: VExtBox | null = null;
   if (gwExtRoutes.length > 0) {
     const boxH = boxTitleH + gwExtRoutes.length * boxRowH + boxPad;
+    const gwBoxY = gy + labelH + boxMarginTop; // compact: labelH below gw header (was: gy+headerGap)
     gwExtBox = {
       sourceLabel: "gateway → external",
       rows: gwExtRoutes.map(({ router, ips }) => ({ router, ip: ips[0], k: statusKind(router.status) })),
-      x: boxX, y, w: boxW, h: boxH,
+      x: boxX, y: gwBoxY, w: boxW, h: boxH,
     };
-    y += boxH + boxMarginTop;
+    y = gwBoxY + boxH + sectionPad; // full section gap → no overlap with first node title (was: +boxMarginTop)
   }
 
   const instNodes = insts.map((inst) => {
@@ -365,17 +381,40 @@ function buildTopoV(snapshot: Snapshot, W: number) {
   });
 
   const routerDots = instNodes.flatMap((n) => n.dots.map((d: any) => ({ ...d, node: n })));
-  return { gateway, instNodes, routerDots, gwExtBox, dotX0, nodeLabelX, cols, dotGapX, dotGapY, totalH: y + 6 };
+
+  // External polylines for packet animation: L-path from source circle edge to box mid-left.
+  const extPaths: [number, number][][] = [];
+  if (gwExtBox) {
+    const my = gwExtBox.y + gwExtBox.h / 2;
+    extPaths.push([[gx, gy + 16], [gx, my], [gwExtBox.x, my]]);
+  }
+  instNodes.forEach((n) => {
+    if (n.extBox) {
+      const my = n.extBox.y + n.extBox.h / 2;
+      extPaths.push([[n.x, n.y + 13], [n.x, my], [n.extBox.x, my]]);
+    }
+  });
+
+  return { gateway, instNodes, routerDots, gwExtBox, dotX0, nodeLabelX, cols, dotGapX, dotGapY, totalH: y + 6, extPaths };
 }
 
 function VTopoEdges({ model }: { model: VTopoModel }) {
-  const { gateway: g, instNodes } = model;
+  const { gateway: g, instNodes, gwExtBox } = model;
   return (
     <g className="topo-edges">
       {instNodes.map((n) => (
         // trunk descends at the gateway's x (clear channel), then hooks right into the node
         <path key={"ge" + n.name} className={`edge e-${n.k}`} d={`M${g.x},${g.y} C${g.x},${n.y} ${g.x},${n.y} ${n.x},${n.y}`} />
       ))}
+      {/* External box connectors: L-path from source circle edge down then right to box mid-left */}
+      {gwExtBox && (
+        <path className="ext-conn" d={`M${g.x},${g.y + 16} V${gwExtBox.y + gwExtBox.h / 2} H${gwExtBox.x}`} />
+      )}
+      {instNodes.map((n) =>
+        n.extBox ? (
+          <path key={"vc" + n.name} className="ext-conn" d={`M${n.x},${n.y + 13} V${n.extBox.y + n.extBox.h / 2} H${n.extBox.x}`} />
+        ) : null
+      )}
     </g>
   );
 }
@@ -443,9 +482,39 @@ function VExtBoxGroup({ box, onSelect }: { box: { sourceLabel: string; rows: { r
 
 // ======= SHARED: animated flow packets =======
 
+/**
+ * Sample a point at fraction t (0–1) along a multi-segment polyline using
+ * arc-length parameterisation so packets move at constant visual speed.
+ */
+function samplePolyline(pts: [number, number][], t: number): [number, number] {
+  if (pts.length === 0) return [0, 0];
+  if (pts.length === 1) return pts[0];
+  const lens: number[] = [0];
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i][0] - pts[i - 1][0];
+    const dy = pts[i][1] - pts[i - 1][1];
+    lens.push(lens[i - 1] + Math.sqrt(dx * dx + dy * dy));
+  }
+  const total = lens[lens.length - 1];
+  if (total === 0) return pts[0];
+  const target = t * total;
+  for (let i = 1; i < lens.length; i++) {
+    if (lens[i] >= target || i === lens.length - 1) {
+      const seg = lens[i] - lens[i - 1];
+      const frac = seg === 0 ? 0 : (target - lens[i - 1]) / seg;
+      return [
+        pts[i - 1][0] + frac * (pts[i][0] - pts[i - 1][0]),
+        pts[i - 1][1] + frac * (pts[i][1] - pts[i - 1][1]),
+      ];
+    }
+  }
+  return pts[pts.length - 1];
+}
+
 function FlowPackets({ model, vertical, dir: _dir }: { model: TopoModel | VTopoModel; vertical?: boolean; dir?: string }) {
   const [, force] = useState(0);
   const packets = useRef<{ t: number; node: any; id: number }[]>([]);
+  const extPackets = useRef<{ t: number; path: [number, number][]; id: number }[]>([]);
   const raf = useRef(0);
   const last = useRef(0);
   useEffect(() => {
@@ -453,12 +522,21 @@ function FlowPackets({ model, vertical, dir: _dir }: { model: TopoModel | VTopoM
       if (!last.current) last.current = ts;
       const dt = ts - last.current;
       last.current = ts;
+      // Node packets along solid gateway→node beziers
       if (Math.random() < dt / 600) {
         const n = model.instNodes[Math.floor(Math.random() * model.instNodes.length)];
         if (n) packets.current.push({ t: 0, node: n, id: Math.random() });
       }
+      // External packets along dashed ingress polylines (half spawn rate — stays calm)
+      const ep = model.extPaths;
+      if (ep.length > 0 && Math.random() < dt / 1200) {
+        const path = ep[Math.floor(Math.random() * ep.length)];
+        extPackets.current.push({ t: 0, path, id: Math.random() });
+      }
       packets.current = packets.current.filter((p) => p.t < 1);
       packets.current.forEach((p) => (p.t += dt / 1400));
+      extPackets.current = extPackets.current.filter((p) => p.t < 1);
+      extPackets.current.forEach((p) => (p.t += dt / 1400));
       force((x) => x + 1);
       raf.current = requestAnimationFrame(tick);
     };
@@ -483,6 +561,10 @@ function FlowPackets({ model, vertical, dir: _dir }: { model: TopoModel | VTopoM
           y = cubic(gateway.y, gateway.y, n.y, n.y, t);
         }
         return <circle key={p.id} className={`packet p-${n.k}`} cx={x} cy={y} r="2.6" />;
+      })}
+      {extPackets.current.map((p) => {
+        const [px, py] = samplePolyline(p.path, p.t);
+        return <circle key={p.id} className="packet p-warn" cx={px} cy={py} r="2.6" />;
       })}
     </g>
   );
