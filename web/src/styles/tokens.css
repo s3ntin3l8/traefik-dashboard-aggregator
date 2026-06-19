@@ -758,6 +758,8 @@ button { font-family: inherit; cursor: pointer; }
 /* Per-source dashed external group boxes */
 .ext-box { fill: none; stroke: var(--warn); stroke-opacity: 0.45; stroke-dasharray: 4 3; rx: 5; }
 .ext-box-title { font-size: 9px; fill: var(--warn); opacity: 0.7; font-weight: 600; }
+/* Mobile external box connectors (L-path from source to box) */
+.ext-conn { fill: none; stroke: var(--warn); stroke-width: 1.2; stroke-opacity: 0.45; stroke-dasharray: 5 3; }
 .packet { filter: drop-shadow(0 0 3px currentColor); }
 .p-ok { fill: var(--ok); } .p-warn { fill: var(--warn); } .p-down { fill: var(--down); }
 
