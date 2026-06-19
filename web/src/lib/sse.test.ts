@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fetchLogs } from "./sse";
+import { fetchLogs, fetchFeatures, fetchMe } from "./sse";
 
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
   return Promise.resolve({
@@ -62,5 +62,52 @@ describe("fetchLogs", () => {
   it("throws with the status code on a non-OK response", async () => {
     fetchMock.mockReturnValue(jsonResponse({}, { ok: false, status: 503 }));
     await expect(fetchLogs({ startMs: 1, endMs: 2 })).rejects.toThrow("logs query failed: 503");
+  });
+});
+
+describe("fetchFeatures", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("returns the parsed /api/config payload", async () => {
+    fetchMock.mockReturnValue(jsonResponse({ lokiEnabled: true, authentikEnabled: true, version: "1.2.3" }));
+    const f = await fetchFeatures();
+    expect(fetchMock).toHaveBeenCalledWith("/api/config");
+    expect(f).toEqual({ lokiEnabled: true, authentikEnabled: true, version: "1.2.3" });
+  });
+
+  it("falls back to all-disabled when the request throws", async () => {
+    fetchMock.mockRejectedValue(new Error("network down"));
+    expect(await fetchFeatures()).toEqual({ lokiEnabled: false, authentikEnabled: false });
+  });
+});
+
+describe("fetchMe", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const empty = { user: "", email: "", name: "", groups: "", signOutPath: "" };
+
+  it("merges the response over the empty identity defaults", async () => {
+    fetchMock.mockReturnValue(jsonResponse({ user: "alice", email: "a@x.io" }));
+    expect(await fetchMe()).toEqual({ ...empty, user: "alice", email: "a@x.io" });
+  });
+
+  it("returns the empty identity on a non-OK response", async () => {
+    fetchMock.mockReturnValue(jsonResponse({}, { ok: false, status: 401 }));
+    expect(await fetchMe()).toEqual(empty);
+  });
+
+  it("returns the empty identity when the request throws", async () => {
+    fetchMock.mockRejectedValue(new Error("boom"));
+    expect(await fetchMe()).toEqual(empty);
   });
 });

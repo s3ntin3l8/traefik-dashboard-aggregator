@@ -19,7 +19,9 @@ export const ACCENTS = ["#7c6cff", "#19c37d", "#18b6d6", "#f0a82a", "#f0436a"];
 
 const KEY = "tv-tweaks";
 
-function relLum(hex: string): number {
+// WCAG relative luminance of an #rrggbb color; used to pick a readable accent
+// contrast. Exported for unit testing.
+export function relLum(hex: string): number {
   const m = hex.replace("#", "");
   const r = parseInt(m.slice(0, 2), 16) / 255;
   const g = parseInt(m.slice(2, 4), 16) / 255;

@@ -5,19 +5,11 @@ import { Icons, Badge, InstanceTag, NodeLine, MwList, SortHead, safeHref, useIsM
 import { statusKind } from "../lib/types";
 import type { Sort } from "../components/ui";
 import type { Sel } from "../lib/sel";
+import { sortRows } from "../lib/sort";
+import { resolveChainMembers } from "../lib/chain";
 
 export function useSorted<T extends Record<string, any>>(rows: T[], sort: Sort): T[] {
-  return useMemo(() => {
-    const r = [...rows];
-    const dir = sort.dir === "asc" ? 1 : -1;
-    r.sort((a, b) => {
-      const av = a[sort.key];
-      const bv = b[sort.key];
-      if (typeof av === "string") return av.localeCompare(bv) * dir;
-      return ((av || 0) - (bv || 0)) * dir;
-    });
-    return r;
-  }, [rows, sort]);
+  return useMemo(() => sortRows(rows, sort), [rows, sort]);
 }
 
 export function HostRule({ rule }: { rule?: string }) {
@@ -242,7 +234,7 @@ export function Drawer({ item, snapshot, onClose, onSelect }: { item: Sel; snaps
         <div className="drawer-body">
           {kind === "router" && <RouterDetail r={data} snapshot={snapshot} onSelect={onSelect} />}
           {kind === "service" && <ServiceDetail s={data} snapshot={snapshot} />}
-          {kind === "middleware" && <MiddlewareDetail m={data} snapshot={snapshot} />}
+          {kind === "middleware" && <MiddlewareDetail m={data} snapshot={snapshot} onSelect={onSelect} />}
           {kind === "instance" && <InstanceDetail i={data} snapshot={snapshot} />}
         </div>
       </div>
@@ -344,14 +336,15 @@ function ServiceDetail({ s, snapshot }: { s: Service; snapshot: Snapshot }) {
   );
 }
 
-function MiddlewareDetail({ m, snapshot }: { m: Middleware; snapshot: Snapshot }) {
+function MiddlewareDetail({ m, snapshot, onSelect }: { m: Middleware; snapshot: Snapshot; onSelect: (s: Sel) => void }) {
+  const chainMembers = resolveChainMembers(m, snapshot.middlewares);
   return (
     <>
       <div className="kv"><span>Type</span><span>{m.type}</span></div>
       <div className="kv"><span>Provider</span><span>{m.provider}</span></div>
       <div className="kv"><span>Used by</span><span>{m.usedBy} router{m.usedBy !== 1 ? "s" : ""}</span></div>
       <div className="kv"><span>Node</span><NodeLine snapshot={snapshot} name={m.instance} /></div>
-      
+
       {m.authentik && (
         <>
           <div className="drawer-section">Authentik</div>
@@ -365,6 +358,27 @@ function MiddlewareDetail({ m, snapshot }: { m: Middleware; snapshot: Snapshot }
           {(m.authentik.outposts || []).length > 0 && (
             <div className="kv"><span>Outpost{m.authentik.outposts!.length > 1 ? "s" : ""}</span><span>{m.authentik.outposts!.join(", ")}</span></div>
           )}
+        </>
+      )}
+
+      {chainMembers.length > 0 && (
+        <>
+          <div className="drawer-section">Chain</div>
+          <div className="chain">
+            {chainMembers.map(({ name, mw: member }) => (
+              <div className="chain-step" key={name}>
+                <span className="faint cell-mono" style={{ width: 64, fontSize: 11 }}>{member?.type ?? "mw"}</span>
+                <div
+                  className="chain-node"
+                  style={{ cursor: member ? "pointer" : "default" }}
+                  onClick={() => member && onSelect({ kind: "middleware", data: member })}
+                >
+                  {name.replace(/@.*/, "")}
+                  {member?.authentik && <AkBadge style={{ marginLeft: 6 }} />}
+                </div>
+              </div>
+            ))}
+          </div>
         </>
       )}
 
