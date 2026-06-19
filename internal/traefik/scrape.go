@@ -312,7 +312,7 @@ func (c *Client) services(ctx context.Context, path string) ([]model.Service, bo
 			Name:         s.Name,
 			ShortName:    shortName(s.Name),
 			Provider:     providerOf(s.Name, s.Provider),
-			Type:         s.Type,
+			Type:         serviceType(s.Type, providerOf(s.Name, s.Provider)),
 			Instance:     c.name,
 			Servers:      toServers(&s),
 			ServersUp:    up,

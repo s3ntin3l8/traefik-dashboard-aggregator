@@ -672,6 +672,14 @@ button { font-family: inherit; cursor: pointer; }
 .rule-cell { color: var(--text-dim); }
 .pill-soft { font-size: 11px; padding: 2px 8px; border-radius: 100px; background: var(--panel-2); border: var(--border-style); color: var(--text-dim); }
 [data-dir="a"] .pill-soft { border-radius: var(--radius); }
+/* External indicator pill (topology dots + services table) */
+.pill-ext { font-size: 10px; padding: 1px 5px; border-radius: 100px; background: var(--warn-bg); border: 1px solid color-mix(in oklab, var(--warn) 35%, transparent); color: var(--warn); white-space: nowrap; }
+[data-dir="a"] .pill-ext { border-radius: var(--radius); }
+/* Backends column in services table */
+.backends-cell { display: flex; flex-direction: column; gap: 3px; }
+.backend-row { display: inline-flex; align-items: center; gap: 5px; }
+.backend-addr { font-family: var(--table-mono, monospace); font-size: 11px; color: var(--text-dim); }
+.backend-addr.ext { color: var(--warn); }
 .svc-link { color: var(--text-dim); font-family: var(--font-mono); font-size: 12px; }
 .usedby { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
@@ -744,6 +752,9 @@ button { font-family: inherit; cursor: pointer; }
 .rdot { cursor: pointer; transform-box: fill-box; transform-origin: center; transition: transform .15s ease, filter .15s ease; }
 .rdot:hover { transform: scale(2.1); filter: drop-shadow(0 0 5px currentColor); }
 .rdot-ok { fill: var(--ok); color: var(--ok); } .rdot-warn { fill: var(--warn); color: var(--warn); } .rdot-down { fill: var(--down); color: var(--down); }
+/* External router dots: amber fill with ring, independent of health colour */
+.rdot-ext { fill: var(--warn); color: var(--warn); stroke: var(--warn); stroke-width: 1.5; stroke-opacity: 0.45; }
+.ext-dot-label { font-size: 9px; fill: var(--warn); font-family: var(--table-mono, monospace); }
 .packet { filter: drop-shadow(0 0 3px currentColor); }
 .p-ok { fill: var(--ok); } .p-warn { fill: var(--warn); } .p-down { fill: var(--down); }
 
