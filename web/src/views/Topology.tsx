@@ -147,17 +147,26 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
   const boxPad = 6;       // vertical padding inside the box (top + bottom)
   const boxGap = 8;       // vertical gap between boxes
   const boxX = W - boxW - boxRightMargin; // left edge of all boxes (right-anchored)
-  const busX = boxX - busGap;             // vertical bus at left of box region
 
-  // Collect per-source external route lists (node order then gateway).
-  const sources: { label: string; routes: ReturnType<typeof externalRoutesFor> }[] = [];
+  // Collect per-source external route lists (node order then gateway). Each source
+  // carries its own node anchor so its box connects back to *that* node, not the gateway.
+  const sources: {
+    label: string;
+    routes: ReturnType<typeof externalRoutesFor>;
+    anchor: { x: number; y: number; r: number };
+    isGateway: boolean;
+  }[] = [];
   instNodes.forEach((node) => {
     const routes = externalRoutesFor(snapshot, node.name, node.ip || "");
-    if (routes.length > 0) sources.push({ label: node.name + " → external", routes });
+    if (routes.length > 0) {
+      sources.push({ label: node.name + " → external", routes, anchor: { x: node.x, y: node.y, r: 13 }, isGateway: false });
+    }
   });
   if (gw) {
     const gwRoutes = externalRoutesFor(snapshot, gw.name, gw.ip || "");
-    if (gwRoutes.length > 0) sources.push({ label: "gateway → external", routes: gwRoutes });
+    if (gwRoutes.length > 0) {
+      sources.push({ label: "gateway → external", routes: gwRoutes, anchor: { x: gateway.x, y: gateway.y, r: 22 }, isGateway: true });
+    }
   }
 
   const boxes: ExtBox[] = [];
@@ -181,29 +190,33 @@ function buildTopo(snapshot: Snapshot, W: number, H: number) {
 
   const boxStackBottom = boxTop - boxGap + 12;
   const height = Math.max(H, boxStackBottom);
-  const railY = height - 14;
-  const railStartY = gateway.y + 56;
-  const rail = { startY: railStartY, railY, busX };
+  const railY = height - 14;        // bottom channel for the gateway's tucked connector
+  const riserX = boxX - 16;         // vertical riser just left of the boxes (gateway only)
 
-  // One polyline per external box: the exact path packets travel (gateway → rail → bus → box mid).
-  const extPaths: [number, number][][] = boxes.map((b) => {
+  // One polyline per external box, index-aligned with `boxes`/`sources`. Each connector
+  // leaves its OWN source node so dockerhost's path is never confused with the gateway's:
+  //   - downstream nodes rise vertically at the node's x (left of its router grid) to the
+  //     box's mid-Y, then run right into the box.
+  //   - the gateway (far left) instead drops to the bottom rail, runs right, then rises at
+  //     riserX into its box — staying tucked along the bottom so it never crosses the canvas.
+  const extPaths: [number, number][][] = boxes.map((b, i) => {
+    const { anchor: a, isGateway } = sources[i];
     const my = b.y + b.h / 2;
-    return [[gateway.x, railStartY], [gateway.x, railY], [busX, railY], [busX, my], [b.x, my]];
+    if (isGateway) {
+      return [[a.x, a.y + a.r], [a.x, railY], [riserX, railY], [riserX, my], [b.x, my]];
+    }
+    return [[a.x, a.y - a.r], [a.x, my], [b.x, my]];
   });
 
-  return { gateway, instNodes, routerDots, boxes, dotX0, gridCols, dotGapX, dotGapY, height, rail, extPaths };
+  return { gateway, instNodes, routerDots, boxes, dotX0, gridCols, dotGapX, dotGapY, height, extPaths };
 }
 
+// Build an SVG path string ("M x,y L x,y …") from a polyline of points.
+const polyD = (pts: [number, number][]) =>
+  pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x},${y}`).join(" ");
+
 function TopoEdges({ model, height: _height }: { model: TopoModel; height: number }) {
-  const { gateway, instNodes, dotX0, boxes, rail } = model;
-  // Bus path: trunk from gateway down to rail channel, right to busX, then up to the topmost
-  // box mid-Y (all boxes lie between), with per-box horizontal stubs branching to each box.
-  // Single <path> with subpaths so amber opacity doesn't compound at intersections.
-  const midY = (b: ExtBox) => b.y + b.h / 2;
-  const busPath = boxes.length > 0
-    ? `M${gateway.x},${rail.startY} V${rail.railY} H${rail.busX} V${midY(boxes[0])}` +
-      boxes.map((b) => ` M${rail.busX},${midY(b)} H${b.x}`).join("")
-    : "";
+  const { gateway, instNodes, dotX0, extPaths } = model;
   return (
     <g className="topo-edges">
       {instNodes.map((n) => (
@@ -212,13 +225,12 @@ function TopoEdges({ model, height: _height }: { model: TopoModel; height: numbe
       {instNodes.filter((n) => n.routerCount > 0).map((n) => (
         <path key={"conn" + n.name} d={`M${n.x + 14},${n.y} H${dotX0 - 8}`} fill="none" stroke={`var(--${n.k})`} strokeWidth="1" strokeOpacity="0.4" strokeDasharray="2 3" />
       ))}
-      {boxes.length > 0 && (
-        <path
-          d={busPath}
-          fill="none" stroke="var(--warn)" strokeWidth="1.2" strokeOpacity="0.45"
-          strokeDasharray="5 3" strokeLinejoin="round"
-        />
-      )}
+      {/* One dashed connector per external box, from its own source node up then across. */}
+      {extPaths.map((pts, i) => (
+        <path key={"ext" + i} d={polyD(pts)}
+          fill="none" stroke="var(--warn)" strokeWidth="1.2" strokeOpacity="0.5"
+          strokeDasharray="5 3" strokeLinejoin="round" strokeLinecap="round" />
+      ))}
     </g>
   );
 }
@@ -403,8 +415,9 @@ function VTopoEdges({ model }: { model: VTopoModel }) {
   return (
     <g className="topo-edges">
       {instNodes.map((n) => (
-        // trunk descends at the gateway's x (clear channel), then hooks right into the node
-        <path key={"ge" + n.name} className={`edge e-${n.k}`} d={`M${g.x},${g.y} C${g.x},${n.y} ${g.x},${n.y} ${n.x},${n.y}`} />
+        // sharp L: vertical trunk at the gateway's x (clear channel), then a horizontal
+        // branch right into the node — bus-topology style, packets follow the same points
+        <path key={"ge" + n.name} className={`edge e-${n.k}`} d={`M${g.x},${g.y} V${n.y} H${n.x}`} />
       ))}
       {/* External box connectors: L-path from source circle edge down then right to box mid-left */}
       {gwExtBox && (
@@ -552,9 +565,8 @@ function FlowPackets({ model, vertical, dir: _dir }: { model: TopoModel | VTopoM
         const n = p.node;
         let x: number, y: number;
         if (vertical) {
-          // match VTopoEdges exactly: M(g) C(g.x,n.y)(g.x,n.y)(n.x,n.y)
-          x = cubic(gateway.x, gateway.x, gateway.x, n.x, t);
-          y = cubic(gateway.y, n.y, n.y, n.y, t);
+          // match VTopoEdges L exactly: M(g.x,g.y) V(n.y) H(n.x) — same three points
+          [x, y] = samplePolyline([[gateway.x, gateway.y], [gateway.x, n.y], [n.x, n.y]], t);
         } else {
           const mx = (gateway.x + n.x) / 2;
           x = cubic(gateway.x, mx, mx, n.x, t);
