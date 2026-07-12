@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
 )
 
 func TestAdminGate_NoGroupsConfiguredFailsClosed(t *testing.T) {
@@ -246,5 +249,251 @@ func TestLogInstance_ReflectsLiveInstanceSet(t *testing.T) {
 	}
 	if inst, ok := s.logInstance(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/logs/query?instance=fresh", nil)); !ok || inst != "fresh" {
 		t.Fatalf("newly-added instance should be accepted: inst=%q ok=%v", inst, ok)
+	}
+}
+
+func TestIsAdmin_IgnoresWhitespaceOnlyGroupEntries(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"admins"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	req.Header.Set("X-authentik-groups", " , ,  , admins")
+	if !s.isAdmin(req) {
+		t.Error("isAdmin should skip blank entries and still match admins")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	req.Header.Set("X-authentik-groups", " , ,  ,")
+	if s.isAdmin(req) {
+		t.Error("isAdmin should be false when every entry is blank")
+	}
+}
+
+func TestInstanceExists_DeletedNameReturnsFalse(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"admins"})
+
+	// node-1 is a base instance; marking it deleted must flip instanceExists
+	// to false even though it's still present in s.baseInstances.
+	ov := config.Overrides{Deleted: []string{"node-1"}}
+	if s.instanceExists("node-1", ov) {
+		t.Error("a base instance marked deleted should not exist")
+	}
+	if !s.instanceExists("node-1", config.Overrides{}) {
+		t.Error("a base instance with no overrides should exist")
+	}
+}
+
+func TestDecodeInstanceWrite_InvalidJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/instances", bytes.NewBufferString("{not valid json"))
+	if _, err := decodeInstanceWrite(req); err == nil {
+		t.Fatal("expected an error decoding malformed JSON")
+	}
+}
+
+func TestHandleCreateInstance_InvalidBodyAndName(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"admins"})
+
+	rr := httptest.NewRecorder()
+	s.handleCreateInstance(rr, adminReq(http.MethodPost, "/api/instances", "{not valid json"))
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("malformed body: status = %d, want 400", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	s.handleCreateInstance(rr, adminReq(http.MethodPost, "/api/instances", `{"name":"has spaces","url":"https://x"}`))
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("invalid name: status = %d, want 400", rr.Code)
+	}
+}
+
+func TestHandleUpdateInstance_GateBodyNameAndURL(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"admins"})
+
+	// No admin group header -> 403, never reaches the body/name/URL checks.
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/instances/node-1", bytes.NewBufferString(`{"url":"https://x"}`))
+	req.SetPathValue("name", "node-1")
+	s.handleUpdateInstance(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("no admin header: status = %d, want 403", rr.Code)
+	}
+
+	// Invalid path name.
+	rr = httptest.NewRecorder()
+	req = adminReq(http.MethodPut, `/api/instances/{job="x"}`, `{"url":"https://x"}`)
+	req.SetPathValue("name", `{job="x"}`)
+	s.handleUpdateInstance(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("invalid path name: status = %d, want 400", rr.Code)
+	}
+
+	// Malformed body.
+	rr = httptest.NewRecorder()
+	req = adminReq(http.MethodPut, "/api/instances/node-1", "{not valid json")
+	req.SetPathValue("name", "node-1")
+	s.handleUpdateInstance(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("malformed body: status = %d, want 400", rr.Code)
+	}
+
+	// Invalid URL scheme.
+	rr = httptest.NewRecorder()
+	req = adminReq(http.MethodPut, "/api/instances/node-1", `{"url":"javascript:alert(1)"}`)
+	req.SetPathValue("name", "node-1")
+	s.handleUpdateInstance(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("bad url scheme: status = %d, want 400", rr.Code)
+	}
+}
+
+func TestHandleUpdateInstance_UpsertReplacesExistingOverride(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"admins"})
+
+	req := adminReq(http.MethodPut, "/api/instances/node-1", `{"url":"https://10.0.0.1"}`)
+	req.SetPathValue("name", "node-1")
+	rr := httptest.NewRecorder()
+	s.handleUpdateInstance(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("first update: status = %d, want 200", rr.Code)
+	}
+
+	// A second edit of the same instance must replace the pending override,
+	// not append a duplicate entry (exercises upsertOverride's "found" path).
+	req = adminReq(http.MethodPut, "/api/instances/node-1", `{"url":"https://10.0.0.2"}`)
+	req.SetPathValue("name", "node-1")
+	rr = httptest.NewRecorder()
+	s.handleUpdateInstance(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("second update: status = %d, want 200", rr.Code)
+	}
+	var got struct {
+		Instances []instanceView `json:"instances"`
+	}
+	json.NewDecoder(rr.Body).Decode(&got)
+	if len(got.Instances) != 1 {
+		t.Fatalf("expected exactly 1 instance (no duplicate override), got %d: %+v", len(got.Instances), got.Instances)
+	}
+	if got.Instances[0].URL != "https://10.0.0.2" {
+		t.Errorf("url = %q, want the second edit's value", got.Instances[0].URL)
+	}
+}
+
+func TestHandleDeleteInstance_GateAndInvalidName(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"admins"})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/instances/node-1", nil)
+	req.SetPathValue("name", "node-1")
+	s.handleDeleteInstance(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("no admin header: status = %d, want 403", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	req = adminReq(http.MethodDelete, `/api/instances/{job="x"}`, "")
+	req.SetPathValue("name", `{job="x"}`)
+	s.handleDeleteInstance(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("invalid path name: status = %d, want 400", rr.Code)
+	}
+}
+
+func TestHandleDeleteInstance_KeepsOtherOverridesAndDeletions(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"admins"})
+
+	// Add two UI-only instances, then delete just one -- exercises the
+	// "keep the others" branch of removeOverrideByName.
+	for _, name := range []string{"second", "third"} {
+		rr := httptest.NewRecorder()
+		s.handleCreateInstance(rr, adminReq(http.MethodPost, "/api/instances", `{"name":"`+name+`","url":"https://10.0.0.9"}`))
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("setup create %s failed: %d", name, rr.Code)
+		}
+	}
+
+	rr := httptest.NewRecorder()
+	req := adminReq(http.MethodDelete, "/api/instances/second", "")
+	req.SetPathValue("name", "second")
+	s.handleDeleteInstance(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("delete: status = %d, want 200", rr.Code)
+	}
+	if !instanceKnown(s.store.InstanceNames(), "third") {
+		t.Error("deleting 'second' should not remove the unrelated 'third' override")
+	}
+	if instanceKnown(s.store.InstanceNames(), "second") {
+		t.Error("'second' should be gone")
+	}
+}
+
+func TestApplyOverrides_PersistFailureReturns500(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission checks don't apply when running as root")
+	}
+	dir := t.TempDir()
+	s := testServerWithOverridesDir(t, nil, []string{"admins"}, dir)
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	defer os.Chmod(dir, 0o755)
+
+	rr := httptest.NewRecorder()
+	s.handleCreateInstance(rr, adminReq(http.MethodPost, "/api/instances", `{"name":"second","url":"https://10.0.0.9"}`))
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("create with unwritable overrides dir: status = %d, want 500", rr.Code)
+	}
+
+	req := adminReq(http.MethodPut, "/api/instances/node-1", `{"url":"https://10.0.0.1"}`)
+	req.SetPathValue("name", "node-1")
+	rr = httptest.NewRecorder()
+	s.handleUpdateInstance(rr, req)
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("update with unwritable overrides dir: status = %d, want 500", rr.Code)
+	}
+}
+
+func TestUpsertOverride(t *testing.T) {
+	list := []config.OverrideInstance{{Name: "a", URL: "https://a"}, {Name: "b", URL: "https://b"}}
+
+	replaced := upsertOverride(list, config.OverrideInstance{Name: "a", URL: "https://a2"})
+	if len(replaced) != 2 || replaced[0].URL != "https://a2" {
+		t.Errorf("expected in-place replace, got %+v", replaced)
+	}
+
+	appended := upsertOverride(list, config.OverrideInstance{Name: "c", URL: "https://c"})
+	if len(appended) != 3 || appended[2].Name != "c" {
+		t.Errorf("expected append for a new name, got %+v", appended)
+	}
+}
+
+func TestRemoveOverrideByName(t *testing.T) {
+	list := []config.OverrideInstance{{Name: "a"}, {Name: "b"}, {Name: "c"}}
+
+	got := removeOverrideByName(list, "b")
+	if len(got) != 2 || got[0].Name != "a" || got[1].Name != "c" {
+		t.Errorf("expected [a c], got %+v", got)
+	}
+
+	got = removeOverrideByName(nil, "x")
+	if len(got) != 0 {
+		t.Errorf("removing from an empty list should stay empty, got %+v", got)
+	}
+}
+
+func TestRemoveName(t *testing.T) {
+	got := removeName([]string{"a", "b", "c"}, "b")
+	if len(got) != 2 || got[0] != "a" || got[1] != "c" {
+		t.Errorf("expected [a c], got %v", got)
+	}
+}
+
+func TestAppendUnique(t *testing.T) {
+	got := appendUnique([]string{"a"}, "b")
+	if len(got) != 2 || got[1] != "b" {
+		t.Errorf("expected [a b], got %v", got)
+	}
+
+	got = appendUnique([]string{"a", "b"}, "b")
+	if len(got) != 2 {
+		t.Errorf("appending an existing name should be a no-op, got %v", got)
 	}
 }

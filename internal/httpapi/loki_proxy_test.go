@@ -29,6 +29,14 @@ func testServer(t *testing.T, lk *loki.Client) *Server {
 // given admin groups (nil/empty leaves it disabled, same as testServer).
 func testServerWithAdmin(t *testing.T, lk *loki.Client, adminGroups []string) *Server {
 	t.Helper()
+	return testServerWithOverridesDir(t, lk, adminGroups, t.TempDir())
+}
+
+// testServerWithOverridesDir is testServerWithAdmin with the overrides.json
+// directory exposed, so a test can (e.g.) chmod it read-only afterward to
+// exercise the persist-failure path.
+func testServerWithOverridesDir(t *testing.T, lk *loki.Client, adminGroups []string, overridesDir string) *Server {
+	t.Helper()
 	cfg := &config.Config{
 		Instances: []config.Instance{{Name: "node-1", URL: "https://x"}},
 		Server:    config.Server{PollInterval: time.Hour, RequestTimeout: 5 * time.Second},
@@ -37,7 +45,7 @@ func testServerWithAdmin(t *testing.T, lk *loki.Client, adminGroups []string) *S
 	hub := sse.New()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	poller := aggregator.NewPoller(cfg, store, hub, log)
-	ov, err := overrides.Open(filepath.Join(t.TempDir(), "overrides.json"))
+	ov, err := overrides.Open(filepath.Join(overridesDir, "overrides.json"))
 	if err != nil {
 		t.Fatalf("overrides.Open: %v", err)
 	}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { safeHref, timeAgo, clockHMS, instOK } from "./ui";
+import { safeHref, timeAgo, clockHMS, instOK, Icons } from "./ui";
 
 describe("safeHref", () => {
   beforeEach(() => {
@@ -73,5 +73,18 @@ describe("instOK", () => {
   it("matches only listed instances otherwise", () => {
     expect(instOK(["edge", "core"], "edge")).toBe(true);
     expect(instOK(["edge", "core"], "leaf")).toBe(false);
+  });
+});
+
+describe("Icons (instance-admin set)", () => {
+  it("plus/edit/trash thread an explicit size through to the underlying Icon", () => {
+    expect(Icons.plus({ size: 16 }).props.size).toBe(16);
+    expect(Icons.edit({ size: 20 }).props.size).toBe(20);
+    expect(Icons.trash({ size: 12 }).props.size).toBe(12);
+  });
+
+  it("edit and trash fall back to a 15px default size when none is given", () => {
+    expect(Icons.edit({}).props.size).toBe(15);
+    expect(Icons.trash({}).props.size).toBe(15);
   });
 });

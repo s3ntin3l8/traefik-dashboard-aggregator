@@ -43,3 +43,29 @@ func TestRunHealthcheck(t *testing.T) {
 		t.Errorf("unreachable probe exit = %d, want 1", got)
 	}
 }
+
+func TestSplitAdminGroups(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"   ", nil},
+		{"admins", []string{"admins"}},
+		{"admins,ops", []string{"admins", "ops"}},
+		{" admins , , ops ,", []string{"admins", "ops"}},
+	}
+	for _, c := range cases {
+		got := splitAdminGroups(c.in)
+		if len(got) != len(c.want) {
+			t.Errorf("splitAdminGroups(%q) = %v, want %v", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("splitAdminGroups(%q) = %v, want %v", c.in, got, c.want)
+				break
+			}
+		}
+	}
+}
