@@ -13,6 +13,7 @@ import (
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/aggregator"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/loki"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/overrides"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/sse"
 )
 
@@ -24,6 +25,18 @@ func init() {
 	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
+// InstanceAdmin bundles the dependencies behind the live instance-editing
+// endpoints (GET/POST/PUT/DELETE /api/instances). AdminGroups gates the
+// write endpoints on the X-authentik-groups header the app already reflects
+// for display via /api/me -- an empty AdminGroups set fails CLOSED (writes
+// disabled for everyone), matching the app's "no auth of its own" posture
+// until an operator explicitly opts in. See docs/authentik.md.
+type InstanceAdmin struct {
+	Poller      *aggregator.Poller
+	Overrides   *overrides.Store
+	AdminGroups []string
+}
+
 // Server bundles the dependencies the handlers need.
 type Server struct {
 	store            *aggregator.Store
@@ -32,22 +45,30 @@ type Server struct {
 	spa              fs.FS
 	log              *slog.Logger
 	sseSlot          *limiter
-	allowedInstances map[string]struct{}
 	signOutPath      string
 	authentikEnabled bool
 	version          string
+
+	poller         *aggregator.Poller
+	overridesStore *overrides.Store
+	adminGroups    map[string]struct{}
+	baseInstances  []config.Instance
+	pollInterval   time.Duration
+	requestTimeout time.Duration
 }
 
 // New builds the HTTP server handler set. version is traefik-viewer's own build
 // version (injected via -ldflags; "dev" for local builds), surfaced on /api/config.
-func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Client, spa fs.FS, log *slog.Logger, version string) *Server {
-	allowed := make(map[string]struct{}, len(cfg.Instances))
-	for _, in := range cfg.Instances {
-		allowed[in.Name] = struct{}{}
-	}
+func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Client, spa fs.FS, log *slog.Logger, version string, admin InstanceAdmin) *Server {
 	signOut := ""
 	if cfg.Server.SignOutPath != nil {
 		signOut = *cfg.Server.SignOutPath
+	}
+	adminGroups := make(map[string]struct{}, len(admin.AdminGroups))
+	for _, g := range admin.AdminGroups {
+		if g = strings.TrimSpace(g); g != "" {
+			adminGroups[g] = struct{}{}
+		}
 	}
 	return &Server{
 		store:            store,
@@ -56,10 +77,15 @@ func New(cfg *config.Config, store *aggregator.Store, hub *sse.Hub, lk *loki.Cli
 		spa:              spa,
 		log:              log,
 		sseSlot:          newLimiter(maxSSEClients),
-		allowedInstances: allowed,
 		signOutPath:      signOut,
 		authentikEnabled: cfg.AuthentikEnabled(),
 		version:          version,
+		poller:           admin.Poller,
+		overridesStore:   admin.Overrides,
+		adminGroups:      adminGroups,
+		baseInstances:    cfg.Instances,
+		pollInterval:     cfg.Server.PollInterval,
+		requestTimeout:   cfg.Server.RequestTimeout,
 	}
 }
 
@@ -84,6 +110,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/logs/tail", s.handleLogsTail)
 	mux.HandleFunc("GET /api/config", s.handleConfig)
 	mux.HandleFunc("GET /api/me", s.handleMe)
+	mux.HandleFunc("GET /api/instances", s.handleListInstances)
+	mux.HandleFunc("POST /api/instances", s.handleCreateInstance)
+	mux.HandleFunc("PUT /api/instances/{name}", s.handleUpdateInstance)
+	mux.HandleFunc("DELETE /api/instances/{name}", s.handleDeleteInstance)
 	mux.Handle("GET /", s.spaHandler())
 	return recoverMiddleware(s.log, securityHeaders(logMiddleware(s.log, mux)))
 }

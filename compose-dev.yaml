@@ -9,9 +9,13 @@ services:
     env_file: .env
     environment:
       - TV_CONFIG=/config/config.yaml
+      # Optional: set TV_ADMIN_GROUPS=admins in .env and send an
+      # X-authentik-groups: admins header (no proxy in dev) to exercise the
+      # instance-admin UI locally. Unset = instance editing disabled.
     volumes:
       - ./:/src
       - ./config.yaml:/config/config.yaml:ro
+      - traefik-viewer-dev-data:/data
       - go-mod:/go/pkg/mod
     ports:
       - "8080:8080"
@@ -39,3 +43,4 @@ services:
 volumes:
   go-mod:
   web-node-modules:
+  traefik-viewer-dev-data:

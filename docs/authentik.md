@@ -113,25 +113,36 @@ router + middleware here.)
 
 ## 3. Security model — why two rules are load-bearing
 
-The app does **no authorization** of its own. The injected headers only change
-the displayed name. That is safe **only if both** of these hold:
+For nearly every route, the app does **no authorization** of its own — the
+injected headers only change the displayed name. The one exception is the
+instance-admin write endpoints (`POST`/`PUT`/`DELETE /api/instances`, see §7),
+which *do* gate on `X-authentik-groups`. Both postures are safe **only if
+both** of the following hold:
 
 1. **The app's `:8080` is never directly reachable.** It must only be reachable
    through Traefik. `compose.yaml` already attaches it to the external `proxy`
    network and publishes **no host port** — keep it that way. If you expose
    `:8080` directly, the whole app is open, because the app authenticates
-   nobody.
+   nobody and (for read routes) authorizes nobody.
 2. **The edge strips client-supplied `X-authentik-*` / `X-Forwarded-*`
    headers** (the `strip-identity` middleware above, ordered *before* the
    `authentik` middleware). Otherwise a client could send
-   `X-authentik-username: admin` and the UI would display it. It grants no
-   access — but don't let spoofed identity show up at all.
+   `X-authentik-username: admin` and the UI would display it — or, for
+   instance editing, send `X-authentik-groups: <your admin group>` and pass
+   the write gate outright. It's the `authentik` outpost re-setting these
+   headers from the verified session, after `strip-identity` removes any
+   client-supplied ones, that makes the header trustworthy at all.
 
-Even with a spoofed header an attacker gains **no privilege** (the app makes no
-access decisions), but rule #1 is what actually keeps the data private.
+Even with a spoofed header on a read-only route an attacker gains **no
+privilege** (the app makes no access decisions there), but rule #1 is what
+actually keeps the data private. For the write routes in §7, a spoofed header
+*is* a privilege escalation — rule #2 is the entire reason
+`X-authentik-groups` can be trusted for authorization there.
 
-**Never** add app-side authorization based on `X-authentik-groups` and assume
-it's trustworthy unless rule #2 is enforced. The app deliberately doesn't.
+**Do not** add further app-side authorization based on `X-authentik-groups`
+elsewhere and assume it's trustworthy unless rule #2 is enforced. The
+instance-admin gate in §7 is a deliberate, narrow exception to the app's
+general "no access decisions" posture — not a precedent to extend casually.
 
 ---
 
@@ -332,6 +343,41 @@ the middleware, just no application attribution.
 The provider list is refreshed at most once per minute; on API errors the
 last-good data is kept and the Traefik poll is unaffected. Leave `url`/`token`
 empty to disable the feature entirely (no authentik calls are made).
+
+---
+
+## 7. UI-editable instances (TV_ADMIN_GROUPS)
+
+Signed-in admins can add, edit, and remove Traefik instances from
+**Settings → Instances** at runtime — no config.yaml edit or restart needed.
+Edits cover topology only (`name`, `url`, `host`, `dashboardURL`, `role`,
+`insecureSkipVerify`); per-instance credentials (`basicAuth`) always stay
+`config.yaml`/`.env`-owned and are never accepted or exposed through this UI.
+See `internal/config.Merge` for how the two layer together and
+`internal/overrides` for where edits are persisted (a `overrides.json` on a
+writable volume — `config.yaml` itself is never modified).
+
+**This is the one place in the app that makes an access decision**, and it's
+why §3's two rules are load-bearing here specifically. `POST`/`PUT`/`DELETE
+/api/instances` are gated: the request's `X-authentik-groups` header must
+intersect a configured admin set, or the request gets `403`.
+
+1. Set `TV_ADMIN_GROUPS` in `.env` to a comma-separated list of authentik
+   group names (e.g. `TV_ADMIN_GROUPS=infra-admins`). Members of any listed
+   group can edit instances; everyone else gets read-only access to
+   `GET /api/instances` (which never contains secrets, so it's left ungated).
+2. **Unset or empty is the default and fails closed** — instance editing is
+   entirely disabled (every write gets `403`) until you opt in, not silently
+   open.
+3. `GET /api/me` reflects a display-only `isAdmin` flag computed from the same
+   check, so the UI only *shows* the panel to group members — the server
+   re-checks independently on every write and is the sole enforcement point.
+   A spoofed `isAdmin` in a modified client changes nothing server-side.
+
+Because a write ultimately makes the server issue outbound HTTP requests to
+whatever URL is saved (the new scrape target), treat admin group membership
+as equivalent to shell access on the traefik-viewer host from an SSRF
+standpoint. Scope `TV_ADMIN_GROUPS` narrowly.
 
 ## Notes
 

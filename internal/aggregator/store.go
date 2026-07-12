@@ -96,6 +96,55 @@ func (s *Store) Apply(results []traefik.InstanceResult, now int64, durations map
 	return changed
 }
 
+// SetInstances replaces the instance universe (order/meta) -- called after a
+// UI edit is merged into the effective instance list. It prunes health/
+// lastGood for instances no longer present, but preserves that state for
+// survivors, so an edit that only tweaks e.g. dashboardURL doesn't reset a
+// node's live/last-good data. Rebuilds the snapshot and returns whether it
+// changed, mirroring Apply's contract, so callers know whether to broadcast.
+func (s *Store) SetInstances(instances []config.Instance) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	newOrder := make([]string, 0, len(instances))
+	newMeta := make(map[string]config.Instance, len(instances))
+	keep := make(map[string]bool, len(instances))
+	for _, in := range instances {
+		newOrder = append(newOrder, in.Name)
+		newMeta[in.Name] = in
+		keep[in.Name] = true
+		if _, ok := s.health[in.Name]; !ok {
+			s.health[in.Name] = instanceHealth{status: "unreachable"}
+		}
+	}
+	for name := range s.health {
+		if !keep[name] {
+			delete(s.health, name)
+			delete(s.lastGood, name)
+		}
+	}
+	s.order = newOrder
+	s.meta = newMeta
+
+	snap := s.build(time.Now().UnixMilli())
+	newHash := hashSnapshot(snap)
+	changed := newHash != s.hash
+	s.snapshot = snap
+	s.hash = newHash
+	return changed
+}
+
+// InstanceNames returns the current set of configured instance names, kept
+// live so callers (e.g. httpapi's ?instance= allowlist) never drift from the
+// store's actual instance set after a runtime edit.
+func (s *Store) InstanceNames() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	names := make([]string, len(s.order))
+	copy(names, s.order)
+	return names
+}
+
 // Snapshot returns the current aggregated snapshot (safe to serialize).
 func (s *Store) Snapshot() *model.Snapshot {
 	s.mu.RLock()

@@ -90,27 +90,29 @@ aggregator.Store (in-memory snapshot, last-good per instance)
 | `config` | Load + env-expand `config.yaml`; `${VAR}` references resolved at load time |
 | `model` | Shared types: `Snapshot`, `Router`, `Service`, `Middleware`, `Certificate`, `Instance` |
 | `traefik` | HTTP client per instance, `Scrape()` fans out concurrently, maps raw API → model types |
-| `aggregator` | `Store` merges per-instance results; keeps last-good data so unreachable nodes show stale state; `Poller` drives the poll loop |
+| `aggregator` | `Store` merges per-instance results; keeps last-good data so unreachable nodes show stale state; `Poller` drives the poll loop. Both are runtime-reconfigurable: `Store.SetInstances`/`Poller.Reconfigure` swap the instance set + poll interval live (a UI instance edit), without a restart |
+| `overrides` | `Store` persists UI-driven, non-secret instance-topology edits (`overrides.json` on a writable path) that layer on top of the `config.yaml`/`.env` bootstrap — see `config.Merge` |
 | `sse` | `Hub` manages SSE client registry; `redirect.go` contains the no-cross-host redirect transport |
-| `httpapi` | Route mux, middleware chain (security headers, recover, logging), `limiter` caps SSE connections, `validate` checks Loki query params |
+| `httpapi` | Route mux, middleware chain (security headers, recover, logging), `limiter` caps SSE connections, `validate` checks Loki query params, `instances.go` has the instance-admin CRUD endpoints (the one place the app does app-side authorization — see invariants below) |
 | `httpx` | Shared HTTP client utilities |
-| `loki` | Loki client — query and tail; server-side LogQL builder (client can only filter by instance name from an allowlist, never raw LogQL) |
+| `loki` | Loki client — query and tail; server-side LogQL builder (client can only filter by instance name from a live allowlist — `Store.InstanceNames()` — never raw LogQL) |
 
 ### Frontend (`web/src/`)
 
 Single-page app; navigation is tab state in `App.tsx` (no router library). Key files:
 
-- `lib/sse.ts` — `useSnapshot()` hook: initial fetch from `/api/snapshot`, then subscribes to SSE `/api/events`; `fetchLogs()` Loki proxy wrapper
+- `lib/sse.ts` — `useSnapshot()` hook: initial fetch from `/api/snapshot`, then subscribes to SSE `/api/events`; `fetchLogs()` Loki proxy wrapper; `fetchInstances`/`createInstance`/`updateInstance`/`deleteInstance` for the instance-admin API (the only POST/PUT/DELETE calls in the app)
 - `lib/types.ts` — TypeScript types mirroring the Go `model` package
-- `views/` — one file per tab; `Tables.tsx` covers HTTP routers/services/middlewares + detail `Drawer`; `ProtocolView.tsx` reuses the same table for TCP/UDP
+- `views/` — one file per tab; `Tables.tsx` covers HTTP routers/services/middlewares + detail `Drawer`; `ProtocolView.tsx` reuses the same table for TCP/UDP; `InstanceAdmin.tsx` is the add/edit/delete panel embedded in `Settings.tsx`, shown only when `/api/me`'s `isAdmin` is true
 - `components/ui.tsx` — shared icon set and low-level UI primitives
 
 ### Key invariants
 
 - **Snapshot hashing**: `Store.hashSnapshot()` zeroes volatile fields (`generatedAt`, `lastScrape`, `scrapeMs`) before hashing so the SSE hub only broadcasts when routing/service data actually changes.
 - **Stale data**: unreachable nodes stay in the snapshot with their last-good data and `status: "unreachable"` — the UI shows a stale banner rather than dropping the rows.
-- **No auth**: the app has no built-in authentication. All endpoints (including `/api/snapshot` which exposes LAN IPs and cert metadata) must be protected by an upstream reverse proxy/SSO. The blessed path is forward-auth delegation (authentik) — see `docs/authentik.md`. `GET /api/me` reflects the proxy-injected `X-authentik-*` identity headers back to the SPA for a display-only "signed in as …" + logout link; the app makes **no** access decisions from them (the proxy is the sole enforcement point, contingent on `:8080` not being directly reachable and the edge stripping client-supplied identity headers). Non-browser/API consumers authenticate through authentik's own non-interactive token auth (Bearer JWT or `goauthentik.io/token` Basic), not a separate app-side credential — see `docs/authentik.md` §4.
-- **Loki scoping**: the server builds the LogQL stream selector from config; the client can only pass an `?instance=` value validated against the configured instance list. Time windows (≤7 days) and result counts (≤5000) are clamped server-side.
+- **No auth (with one deliberate exception)**: the app has no built-in authentication, and makes no access decisions from the proxy-injected `X-authentik-*` identity headers, with a single narrow exception: the instance-admin write endpoints (see below). All endpoints (including `/api/snapshot` which exposes LAN IPs and cert metadata) must be protected by an upstream reverse proxy/SSO. The blessed path is forward-auth delegation (authentik) — see `docs/authentik.md`. `GET /api/me` reflects the identity headers back to the SPA for a display-only "signed in as …" + logout link (plus a display-only `isAdmin` flag, see below); this reflection is safe only contingent on `:8080` not being directly reachable and the edge stripping client-supplied identity headers before the outpost re-sets them. Non-browser/API consumers authenticate through authentik's own non-interactive token auth (Bearer JWT or `goauthentik.io/token` Basic), not a separate app-side credential — see `docs/authentik.md` §4.
+- **UI-editable instances**: `POST`/`PUT`/`DELETE /api/instances` let a signed-in admin add/edit/remove Traefik instances at runtime — the app's *only* app-side authorization decision, gated on the `X-authentik-groups` header intersecting `TV_ADMIN_GROUPS` (env, comma-separated). **Fails closed**: unset/empty `TV_ADMIN_GROUPS` disables all instance-editing writes, not opens them. `GET /api/instances` (read) is ungated — it never contains secrets. Edits cover topology only (`name`/`url`/`host`/`dashboardURL`/`role`/`insecureSkipVerify`); `basicAuth` is always `config.yaml`/`.env`-owned and never accepted or exposed here (`config.Merge`). Edits persist to `overrides.json` (`TV_OVERRIDES_PATH`, default `/data/overrides.json` — a writable volume, distinct from the read-only `config.yaml` mount) and apply live: `Store.SetInstances` + `Poller.Reconfigure` update the running instance/scrape set without a restart. See `docs/authentik.md` §7.
+- **Loki scoping**: the server builds the LogQL stream selector from config; the client can only pass an `?instance=` value validated against the *live* instance list (`Store.InstanceNames()`, which reflects instance edits above — not a snapshot fixed at startup). Time windows (≤7 days) and result counts (≤5000) are clamped server-side.
 - **Credential safety**: the Traefik and Loki HTTP clients reject cross-host redirects to prevent credential replay.
 
 ### CI

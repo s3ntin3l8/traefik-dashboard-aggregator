@@ -160,6 +160,20 @@ export function statusKind(s: string): "ok" | "warn" | "down" {
   return "down";
 }
 
+// EditableInstance mirrors the backend's instanceView (internal/httpapi):
+// the non-secret subset of a configured Traefik instance, plus where it came
+// from. Per-instance credentials (basicAuth) are never exposed here — they
+// stay config.yaml/.env-owned; "file" instances just show as locked in the UI.
+export interface EditableInstance {
+  name: string;
+  role?: string;
+  url: string;
+  host?: string;
+  dashboardURL?: string;
+  insecureSkipVerify: boolean;
+  source: "file" | "override";
+}
+
 export const STATUS_LABEL: Record<string, string> = {
   ok: "OK",
   degraded: "Degraded",

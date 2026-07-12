@@ -32,15 +32,18 @@ func TestHandleMe(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rr.Code)
 	}
-	var got map[string]string
+	var got map[string]any
 	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	if got["user"] != "alice" {
-		t.Errorf("user = %q, want alice", got["user"])
+		t.Errorf("user = %v, want alice", got["user"])
 	}
 	if got["email"] != "alice@example.com" {
-		t.Errorf("email = %q, want alice@example.com", got["email"])
+		t.Errorf("email = %v, want alice@example.com", got["email"])
+	}
+	if got["isAdmin"] != false {
+		t.Errorf("isAdmin = %v, want false (no admin groups configured in this test server)", got["isAdmin"])
 	}
 
 	// Without headers (no proxy): empty identity, never a panic.
@@ -51,7 +54,36 @@ func TestHandleMe(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 	if got["user"] != "" {
-		t.Errorf("user = %q, want empty without proxy", got["user"])
+		t.Errorf("user = %v, want empty without proxy", got["user"])
+	}
+}
+
+// isAdmin on /api/me is display-only, but it must still faithfully reflect
+// the same X-authentik-groups check the write endpoints enforce.
+func TestHandleMe_IsAdminReflectsGroupMembership(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"admins"})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	req.Header.Set("X-authentik-groups", "viewers, admins")
+	s.handleMe(rr, req)
+
+	var got map[string]any
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got["isAdmin"] != true {
+		t.Errorf("isAdmin = %v, want true for a member of the configured admin group", got["isAdmin"])
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	req.Header.Set("X-authentik-groups", "viewers")
+	s.handleMe(rr, req)
+	got = nil
+	json.NewDecoder(rr.Body).Decode(&got)
+	if got["isAdmin"] != false {
+		t.Errorf("isAdmin = %v, want false for a non-admin group", got["isAdmin"])
 	}
 }
 
