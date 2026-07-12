@@ -134,11 +134,20 @@ func (c *Config) applyDefaults() {
 }
 
 func (c *Config) validate() error {
-	if len(c.Instances) == 0 {
+	return ValidateInstances(c.Instances)
+}
+
+// ValidateInstances checks the invariants every effective instance list must
+// satisfy (whether loaded from config.yaml alone or after Merge with UI
+// overrides): at least one instance, unique non-empty names, non-empty URLs.
+// Exported so the httpapi write handlers can validate a merged list before
+// persisting it.
+func ValidateInstances(instances []Instance) error {
+	if len(instances) == 0 {
 		return fmt.Errorf("config: at least one instance is required")
 	}
 	seen := map[string]bool{}
-	for i, in := range c.Instances {
+	for i, in := range instances {
 		if in.Name == "" {
 			return fmt.Errorf("config: instances[%d]: name is required", i)
 		}
@@ -151,6 +160,87 @@ func (c *Config) validate() error {
 		}
 	}
 	return nil
+}
+
+// Overrides holds non-secret, UI-driven instance-topology edits that layer on
+// top of the base config.yaml/.env instance list (see Merge). Persisted by
+// internal/overrides.Store. BasicAuth is deliberately absent from this type:
+// credentials are always sourced from the base config, never written here.
+type Overrides struct {
+	// Instances holds edited or UI-added instances, keyed by Name.
+	Instances []OverrideInstance `json:"instances"`
+	// Deleted lists base instance names removed via the UI.
+	Deleted []string `json:"deleted"`
+}
+
+// OverrideInstance is the editable subset of Instance: everything except
+// BasicAuth, which stays base-owned.
+type OverrideInstance struct {
+	Name               string `json:"name"`
+	Role               string `json:"role"`
+	URL                string `json:"url"`
+	Host               string `json:"host"`
+	DashboardURL       string `json:"dashboardURL"`
+	InsecureSkipVerify bool   `json:"insecureSkipVerify"`
+}
+
+// Merge layers ov on top of base, keyed by instance Name, and returns the
+// effective instance list. Base is the sole source of secrets: an override
+// never changes BasicAuth, even when it edits every other field.
+//
+//   - base instance, not deleted, no matching override -> unchanged
+//   - base instance, not deleted, matching override     -> override's
+//     non-secret fields win; BasicAuth stays from base
+//   - base instance name in ov.Deleted                  -> dropped
+//   - override with no matching base name (and not
+//     itself deleted)                                   -> appended as a new,
+//     credential-less instance
+//
+// Base order is preserved; UI-only additions are appended in override order.
+// A nil ov (no overrides file yet) returns base unchanged.
+func Merge(base []Instance, ov *Overrides) []Instance {
+	if ov == nil {
+		return base
+	}
+	deleted := make(map[string]bool, len(ov.Deleted))
+	for _, n := range ov.Deleted {
+		deleted[n] = true
+	}
+	overrideByName := make(map[string]OverrideInstance, len(ov.Instances))
+	for _, o := range ov.Instances {
+		overrideByName[o.Name] = o
+	}
+
+	baseNames := make(map[string]bool, len(base))
+	out := make([]Instance, 0, len(base)+len(ov.Instances))
+	for _, in := range base {
+		baseNames[in.Name] = true
+		if deleted[in.Name] {
+			continue
+		}
+		if o, ok := overrideByName[in.Name]; ok {
+			in.Role = o.Role
+			in.URL = o.URL
+			in.Host = o.Host
+			in.DashboardURL = o.DashboardURL
+			in.InsecureSkipVerify = o.InsecureSkipVerify
+		}
+		out = append(out, in)
+	}
+	for _, o := range ov.Instances {
+		if baseNames[o.Name] || deleted[o.Name] {
+			continue
+		}
+		out = append(out, Instance{
+			Name:               o.Name,
+			Role:               o.Role,
+			URL:                o.URL,
+			Host:               o.Host,
+			DashboardURL:       o.DashboardURL,
+			InsecureSkipVerify: o.InsecureSkipVerify,
+		})
+	}
+	return out
 }
 
 // LokiEnabled reports whether the logs backend is configured.

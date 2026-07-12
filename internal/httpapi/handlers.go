@@ -40,6 +40,10 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		"name":        r.Header.Get("X-authentik-name"),
 		"groups":      r.Header.Get("X-authentik-groups"), // comma-separated
 		"signOutPath": s.signOutPath,
+		// isAdmin is display-only, toggling instance-admin UI affordances. The
+		// server re-checks the same X-authentik-groups header on every write
+		// (see adminGate) and is the sole enforcement point.
+		"isAdmin": s.isAdmin(r),
 	})
 }
 
@@ -114,11 +118,9 @@ func (s *Server) logInstance(w http.ResponseWriter, r *http.Request) (string, bo
 		http.Error(w, `{"error":"invalid instance"}`, http.StatusBadRequest)
 		return "", false
 	}
-	if inst != "" {
-		if _, ok := s.allowedInstances[inst]; !ok {
-			http.Error(w, `{"error":"unknown instance"}`, http.StatusBadRequest)
-			return "", false
-		}
+	if inst != "" && !instanceKnown(s.store.InstanceNames(), inst) {
+		http.Error(w, `{"error":"unknown instance"}`, http.StatusBadRequest)
+		return "", false
 	}
 	return inst, true
 }

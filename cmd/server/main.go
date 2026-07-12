@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/httpapi"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/loki"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/overrides"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/sse"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/web"
 )
@@ -46,11 +48,31 @@ func main() {
 	if *healthcheck {
 		os.Exit(runHealthcheck(cfg.Server.ListenAddr))
 	}
-	log.Info("loaded config", "version", version, "instances", len(cfg.Instances), "poll", cfg.Server.PollInterval, "loki", cfg.LokiEnabled(), "authentik", cfg.AuthentikEnabled())
 
-	store := aggregator.New(cfg)
+	// overrides.json holds UI-driven, non-secret instance-topology edits that
+	// layer on top of the config.yaml/.env bootstrap (base). Persisted on a
+	// separate writable path since config.yaml itself is typically mounted
+	// read-only (see compose.yaml). A missing file just means no edits yet.
+	ovPath := envOr("TV_OVERRIDES_PATH", "/data/overrides.json")
+	ovStore, err := overrides.Open(ovPath)
+	if err != nil {
+		log.Error("load overrides", "path", ovPath, "err", err)
+		os.Exit(1)
+	}
+	ov := ovStore.Get()
+	effectiveInstances := config.Merge(cfg.Instances, &ov)
+	if err := config.ValidateInstances(effectiveInstances); err != nil {
+		log.Error("invalid effective instance list (config.yaml + overrides)", "err", err)
+		os.Exit(1)
+	}
+	effectiveCfg := *cfg
+	effectiveCfg.Instances = effectiveInstances
+
+	log.Info("loaded config", "version", version, "instances", len(effectiveInstances), "baseInstances", len(cfg.Instances), "poll", cfg.Server.PollInterval, "loki", cfg.LokiEnabled(), "authentik", cfg.AuthentikEnabled())
+
+	store := aggregator.New(&effectiveCfg)
 	hub := sse.New()
-	poller := aggregator.NewPoller(cfg, store, hub, log)
+	poller := aggregator.NewPoller(&effectiveCfg, store, hub, log)
 	lk := loki.New(cfg.Loki, 15*time.Second)
 
 	spa, err := web.Dist()
@@ -59,7 +81,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := httpapi.New(cfg, store, hub, lk, spa, log, version)
+	adminGroups := splitAdminGroups(os.Getenv("TV_ADMIN_GROUPS"))
+	if len(adminGroups) == 0 {
+		log.Info("instance editing disabled: TV_ADMIN_GROUPS not set")
+	}
+	srv := httpapi.New(cfg, store, hub, lk, spa, log, version, httpapi.InstanceAdmin{
+		Poller:      poller,
+		Overrides:   ovStore,
+		AdminGroups: adminGroups,
+	})
 	httpServer := &http.Server{
 		Addr:              cfg.Server.ListenAddr,
 		Handler:           srv.Handler(),
@@ -91,4 +121,17 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// splitAdminGroups parses a comma-separated TV_ADMIN_GROUPS value. An empty
+// or unset value yields no groups, which leaves instance editing disabled
+// (see httpapi.InstanceAdmin) -- the fail-closed default.
+func splitAdminGroups(v string) []string {
+	var groups []string
+	for _, g := range strings.Split(v, ",") {
+		if g = strings.TrimSpace(g); g != "" {
+			groups = append(groups, g)
+		}
+	}
+	return groups
 }

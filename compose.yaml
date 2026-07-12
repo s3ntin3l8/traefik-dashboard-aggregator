@@ -5,6 +5,11 @@
 # label below, put any instance credentials in a gitignored .env, optionally pin
 # an image tag or build locally, and uncomment the forward-auth block to require
 # login. For local development with live reload, use compose-dev.yaml instead.
+#
+# To let signed-in admins add/edit/remove Traefik instances from the UI
+# (Settings → Instances), set TV_ADMIN_GROUPS in .env to a comma-separated
+# list of authentik group names — instance editing is disabled by default
+# (fails closed) until this is set. See docs/authentik.md §5.
 services:
   traefik-viewer:
     image: ghcr.io/s3ntin3l8/traefik-dashboard-aggregator:latest
@@ -15,6 +20,10 @@ services:
     env_file: .env
     volumes:
       - ./config.yaml:/config/config.yaml:ro
+      # Writable volume for UI-driven instance edits (see docs/authentik.md
+      # §5 and TV_ADMIN_GROUPS below). config.yaml itself stays read-only —
+      # edits are layered on top from here, not written back to it.
+      - traefik-viewer-data:/data
     healthcheck:
       test: ["CMD", "/traefik-viewer", "-healthcheck", "-config", "/config/config.yaml"]
       interval: 30s
@@ -50,3 +59,6 @@ services:
 networks:
   proxy:
     external: true
+
+volumes:
+  traefik-viewer-data:

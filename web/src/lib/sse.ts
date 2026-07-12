@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Snapshot } from "./types";
+import type { EditableInstance, Snapshot } from "./types";
 
 // useSnapshot subscribes to the backend SSE stream and returns the latest
 // aggregated snapshot. It falls back to a one-shot fetch if SSE fails.
@@ -85,10 +85,13 @@ export async function fetchFeatures(): Promise<{ lokiEnabled: boolean; authentik
 // Identity reflected from an upstream forward-auth proxy (e.g. authentik). All
 // fields are empty when no proxy fronts the app (e.g. local dev), in which case
 // the UI shows no identity block. Display-only: the app enforces no auth itself.
-export type Identity = { user: string; email: string; name: string; groups: string; signOutPath: string };
+// isAdmin is likewise display-only — it only toggles the instance-admin UI;
+// the server re-checks the same group header on every write and is the sole
+// enforcement point (see docs/authentik.md).
+export type Identity = { user: string; email: string; name: string; groups: string; signOutPath: string; isAdmin: boolean };
 
 export async function fetchMe(): Promise<Identity> {
-  const empty: Identity = { user: "", email: "", name: "", groups: "", signOutPath: "" };
+  const empty: Identity = { user: "", email: "", name: "", groups: "", signOutPath: "", isAdmin: false };
   try {
     const r = await fetch("/api/me");
     if (!r.ok) return empty;
@@ -97,3 +100,53 @@ export async function fetchMe(): Promise<Identity> {
     return empty;
   }
 }
+
+// InstanceWriteFields is the editable, non-secret subset a create/update
+// request may set. Per-instance credentials are never accepted here — they
+// stay config.yaml/.env-owned (see internal/config.Merge).
+export type InstanceWriteFields = {
+  name: string;
+  role?: string;
+  url: string;
+  host?: string;
+  dashboardURL?: string;
+  insecureSkipVerify?: boolean;
+};
+
+// ApiError carries the server's {"error": "..."} message for a failed
+// instance-admin request, so the UI can surface the actual reason (403 not
+// admin, 409 duplicate name, 400 validation, ...) instead of a generic one.
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function instanceRequest(method: string, path: string, body?: InstanceWriteFields): Promise<EditableInstance[]> {
+  const r = await fetch(path, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new ApiError(r.status, data?.error || `request failed: ${r.status}`);
+  return data.instances ?? [];
+}
+
+// fetchInstances lists the effective (base config.yaml/.env + UI overrides)
+// instance set. Always readable — the response never contains credentials.
+export async function fetchInstances(): Promise<EditableInstance[]> {
+  const r = await fetch("/api/instances");
+  if (!r.ok) throw new ApiError(r.status, "failed to load instances");
+  const data = await r.json();
+  return data.instances ?? [];
+}
+
+// The following require the caller to be in the server's configured admin
+// group (TV_ADMIN_GROUPS) — a 403 ApiError otherwise.
+export const createInstance = (fields: InstanceWriteFields) => instanceRequest("POST", "/api/instances", fields);
+export const updateInstance = (name: string, fields: InstanceWriteFields) =>
+  instanceRequest("PUT", `/api/instances/${encodeURIComponent(name)}`, fields);
+export const deleteInstance = (name: string) => instanceRequest("DELETE", `/api/instances/${encodeURIComponent(name)}`);

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -12,16 +13,38 @@ import (
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/aggregator"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/config"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/loki"
+	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/overrides"
 	"github.com/s3ntin3l8/traefik-dashboard-aggregator/internal/sse"
 )
 
+// testServer builds a Server with instance editing disabled (no admin group
+// configured -- the default, fail-closed posture). Use testServerWithAdmin
+// for tests that need to exercise the write endpoints.
 func testServer(t *testing.T, lk *loki.Client) *Server {
 	t.Helper()
-	cfg := &config.Config{Instances: []config.Instance{{Name: "node-1", URL: "https://x"}}}
+	return testServerWithAdmin(t, lk, nil)
+}
+
+// testServerWithAdmin builds a Server with instance editing enabled for the
+// given admin groups (nil/empty leaves it disabled, same as testServer).
+func testServerWithAdmin(t *testing.T, lk *loki.Client, adminGroups []string) *Server {
+	t.Helper()
+	cfg := &config.Config{
+		Instances: []config.Instance{{Name: "node-1", URL: "https://x"}},
+		Server:    config.Server{PollInterval: time.Hour, RequestTimeout: 5 * time.Second},
+	}
 	store := aggregator.New(cfg)
-	spa := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html></html>")}}
+	hub := sse.New()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return New(cfg, store, sse.New(), lk, spa, log, "test")
+	poller := aggregator.NewPoller(cfg, store, hub, log)
+	ov, err := overrides.Open(filepath.Join(t.TempDir(), "overrides.json"))
+	if err != nil {
+		t.Fatalf("overrides.Open: %v", err)
+	}
+	spa := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html></html>")}}
+	return New(cfg, store, hub, lk, spa, log, "test", InstanceAdmin{
+		Poller: poller, Overrides: ov, AdminGroups: adminGroups,
+	})
 }
 
 // B-1: a client-supplied instance that isn't a plain identifier must be

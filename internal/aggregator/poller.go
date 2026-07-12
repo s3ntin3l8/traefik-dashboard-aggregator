@@ -22,14 +22,20 @@ type Notifier interface {
 // failure): the data is near-static, no need to hit the API on every poll.
 const authentikTTL = time.Minute
 
-// Poller periodically scrapes every instance and updates the store.
+// Poller periodically scrapes every instance and updates the store. The
+// client set and poll interval are mutex-guarded so Reconfigure can swap them
+// at runtime (a UI-driven instance edit) while Run's poll loop keeps ticking.
 type Poller struct {
-	store    *Store
+	store  *Store
+	notify Notifier
+	log    *slog.Logger
+
+	mu       sync.Mutex
 	clients  []*traefik.Client
 	interval time.Duration
-	notify   Notifier
-	log      *slog.Logger
-	polling  atomic.Bool
+
+	polling atomic.Bool
+	reload  chan struct{} // buffered 1: wakes Run to reset the ticker + poll now
 
 	ak        *authentik.Client // nil when enrichment is disabled
 	akRefresh time.Time         // last refresh attempt (success or failure)
@@ -37,30 +43,67 @@ type Poller struct {
 
 // NewPoller wires clients for each configured instance.
 func NewPoller(cfg *config.Config, store *Store, notify Notifier, log *slog.Logger) *Poller {
-	clients := make([]*traefik.Client, 0, len(cfg.Instances))
-	for _, in := range cfg.Instances {
-		clients = append(clients, traefik.NewClient(in, cfg.Server.RequestTimeout))
-	}
 	return &Poller{
 		store:    store,
-		clients:  clients,
+		clients:  buildClients(cfg.Instances, cfg.Server.RequestTimeout),
 		interval: cfg.Server.PollInterval,
 		notify:   notify,
 		log:      log,
+		reload:   make(chan struct{}, 1),
 		ak:       authentik.New(cfg.Authentik, cfg.Server.RequestTimeout),
 	}
 }
 
+func buildClients(instances []config.Instance, timeout time.Duration) []*traefik.Client {
+	clients := make([]*traefik.Client, 0, len(instances))
+	for _, in := range instances {
+		clients = append(clients, traefik.NewClient(in, timeout))
+	}
+	return clients
+}
+
+// Reconfigure swaps the client set and poll interval used by future polls,
+// then wakes Run to reset its ticker and poll immediately -- so a saved
+// instance edit is reflected in the very next scrape instead of waiting out
+// whatever remains of the old interval. Safe to call concurrently with Run.
+func (p *Poller) Reconfigure(instances []config.Instance, interval, requestTimeout time.Duration) {
+	p.mu.Lock()
+	p.clients = buildClients(instances, requestTimeout)
+	p.interval = interval
+	p.mu.Unlock()
+
+	select {
+	case p.reload <- struct{}{}:
+	default: // a reload is already pending; coalesce
+	}
+}
+
+func (p *Poller) snapshotClients() []*traefik.Client {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.clients
+}
+
+func (p *Poller) currentInterval() time.Duration {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.interval
+}
+
 // Run scrapes immediately, then on the configured interval until ctx is done.
+// A Reconfigure call resets the ticker and triggers an immediate poll.
 func (p *Poller) Run(ctx context.Context) {
 	p.pollOnce(ctx)
-	t := time.NewTicker(p.interval)
+	t := time.NewTicker(p.currentInterval())
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			p.pollOnce(ctx)
+		case <-p.reload:
+			t.Reset(p.currentInterval())
 			p.pollOnce(ctx)
 		}
 	}
@@ -77,12 +120,13 @@ func (p *Poller) pollOnce(ctx context.Context) {
 
 	p.refreshAuthentik(ctx)
 
-	results := make([]traefik.InstanceResult, len(p.clients))
-	durations := make(map[string]time.Duration, len(p.clients))
+	clients := p.snapshotClients()
+	results := make([]traefik.InstanceResult, len(clients))
+	durations := make(map[string]time.Duration, len(clients))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	for i, c := range p.clients {
+	for i, c := range clients {
 		wg.Add(1)
 		go func(i int, c *traefik.Client) {
 			defer wg.Done()

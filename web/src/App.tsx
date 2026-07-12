@@ -280,7 +280,7 @@ export function App() {
           {tab === "udp_services" && <ProtocolView proto="udp" kind="services" snapshot={snapshot} search={search} fInstance={fInstance} fStatus={fStatus} setFStatus={setFStatus} />}
           {tab === "certificates" && <CertificatesView snapshot={snapshot} search={search} fInstance={fInstance} />}
           {tab === "instances" && <InstancesPanel snapshot={snapshot} openTab={(t, inst) => { setTab(t); if (inst) setFInstance([inst]); }} />}
-          {tab === "settings" && <Settings t={t} setTweak={setTweak} lokiEnabled={lokiEnabled} />}
+          {tab === "settings" && <Settings t={t} setTweak={setTweak} lokiEnabled={lokiEnabled} isAdmin={me?.isAdmin ?? false} />}
 
           {isHttpTable && (
             <div className="content-wide fade-in">

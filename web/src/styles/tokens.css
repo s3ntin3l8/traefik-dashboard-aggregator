@@ -819,6 +819,43 @@ button { font-family: inherit; cursor: pointer; }
 .accent-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
 .accent-swatch.on { border-color: var(--text); box-shadow: 0 0 0 2px var(--panel); }
 
+/* instance admin panel */
+.banner-danger { background: var(--down-bg); border-color: color-mix(in oklab, var(--down) 35%, transparent); }
+.instance-list { display: flex; flex-direction: column; gap: 8px; }
+.instance-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border: var(--border-style); border-radius: var(--radius); background: var(--panel-2);
+}
+.instance-row-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.instance-row-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.instance-row-sub { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.instance-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.instance-row-actions .icon-btn { width: 28px; height: 28px; }
+.instance-form {
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 14px; border: var(--border-style); border-radius: var(--radius); background: var(--panel-2);
+}
+.tv-input {
+  background: var(--panel); border: var(--border-style); border-radius: var(--radius);
+  color: var(--text); font-size: 13px; padding: 7px 10px; min-width: 220px;
+}
+.tv-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.tv-input:disabled { color: var(--text-faint); cursor: not-allowed; }
+.form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.tv-btn {
+  padding: 7px 14px; border-radius: var(--radius); border: var(--border-style);
+  background: var(--panel-2); color: var(--text-dim); font-size: 13px; font-weight: 500;
+}
+.tv-btn:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.tv-btn:disabled { opacity: .6; cursor: not-allowed; }
+.tv-btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+.tv-btn-primary:hover:not(:disabled) { color: var(--accent-contrast); opacity: .9; }
+@media (max-width: 560px) {
+  .instance-row { flex-direction: column; align-items: flex-start; }
+  .instance-row-actions { align-self: flex-end; }
+  .tv-input { min-width: 0; width: 100%; }
+}
+
 /* =====================================================================
    RESPONSIVE / MOBILE
    The desktop layout above is unchanged. Below ~860px the fixed sidebar

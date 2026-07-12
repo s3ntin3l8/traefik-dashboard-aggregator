@@ -177,6 +177,103 @@ func TestPollOnce_UpdatesStoreWithResult(t *testing.T) {
 	}
 }
 
+func TestReconfigureSwapsClientsAndInterval(t *testing.T) {
+	cfg := &config.Config{
+		Instances: []config.Instance{{Name: "node-1", URL: "https://10.0.0.1"}},
+		Server:    config.Server{PollInterval: 30 * time.Second, RequestTimeout: 5 * time.Second},
+	}
+	store := New(cfg)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	p := NewPoller(cfg, store, sse.New(), log)
+
+	p.Reconfigure([]config.Instance{
+		{Name: "node-1", URL: "https://10.0.0.1"},
+		{Name: "node-2", URL: "https://10.0.0.2"},
+	}, 5*time.Second, 2*time.Second)
+
+	if got := p.snapshotClients(); len(got) != 2 {
+		t.Errorf("clients after Reconfigure = %d, want 2", len(got))
+	}
+	if got := p.currentInterval(); got != 5*time.Second {
+		t.Errorf("interval after Reconfigure = %v, want 5s", got)
+	}
+}
+
+func TestReconfigureQueuesReloadSignal(t *testing.T) {
+	cfg := &config.Config{
+		Instances: []config.Instance{{Name: "node-1", URL: "https://10.0.0.1"}},
+		Server:    config.Server{PollInterval: 30 * time.Second, RequestTimeout: 5 * time.Second},
+	}
+	store := New(cfg)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	p := NewPoller(cfg, store, sse.New(), log)
+
+	p.Reconfigure(cfg.Instances, 30*time.Second, 5*time.Second)
+	select {
+	case <-p.reload:
+	default:
+		t.Fatal("expected a reload signal to be queued after Reconfigure")
+	}
+
+	// Calling Reconfigure twice in a row without draining should coalesce,
+	// not block on a full channel.
+	done := make(chan struct{})
+	go func() {
+		p.Reconfigure(cfg.Instances, 30*time.Second, 5*time.Second)
+		p.Reconfigure(cfg.Instances, 30*time.Second, 5*time.Second)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Reconfigure blocked on a full reload channel instead of coalescing")
+	}
+}
+
+func TestRunPicksUpReconfigureImmediately(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"Version":"3.7.1"}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Instances: []config.Instance{{Name: "node-1", URL: srv.URL}},
+		// Long interval: if Reconfigure didn't wake Run immediately, the test
+		// would time out waiting for the natural tick.
+		Server: config.Server{PollInterval: time.Hour, RequestTimeout: 2 * time.Second},
+	}
+	store := New(cfg)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	p := NewPoller(cfg, store, sse.New(), log)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go p.Run(ctx)
+
+	// Wait for the initial poll Run() fires on entry.
+	deadline := time.Now().Add(2 * time.Second)
+	for atomic.LoadInt32(&calls) < 1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if atomic.LoadInt32(&calls) < 1 {
+		t.Fatal("initial poll never happened")
+	}
+
+	before := atomic.LoadInt32(&calls)
+	p.Reconfigure(cfg.Instances, time.Hour, 2*time.Second)
+
+	deadline = time.Now().Add(2 * time.Second)
+	for atomic.LoadInt32(&calls) <= before && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := atomic.LoadInt32(&calls); got <= before {
+		t.Errorf("Reconfigure should trigger an immediate poll; calls before=%d after=%d", before, got)
+	}
+}
+
 func TestClientName(t *testing.T) {
 	c := traefik.NewClient(config.Instance{Name: "gw"}, time.Second)
 	if c.Name() != "gw" {

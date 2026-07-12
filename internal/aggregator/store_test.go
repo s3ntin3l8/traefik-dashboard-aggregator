@@ -125,6 +125,79 @@ func TestUsedMiddlewareCount(t *testing.T) {
 	}
 }
 
+func TestSetInstancesPreservesSurvivorState(t *testing.T) {
+	s := testStore()
+	now := time.Now().UnixMilli()
+	s.Apply([]traefik.InstanceResult{okResult("mgmt", 4, 0)}, now, nil)
+
+	changed := s.SetInstances([]config.Instance{
+		{Name: "mgmt", URL: "https://192.168.2.157", DashboardURL: "https://new-dashboard/"},
+	})
+	if !changed {
+		t.Error("changing dashboardURL should be reported as changed")
+	}
+	snap := s.Snapshot()
+	if len(snap.HTTPRouters) != 4 {
+		t.Errorf("survivor lost last-good routers: got %d, want 4", len(snap.HTTPRouters))
+	}
+	if snap.Instances[0].Status != "ok" {
+		t.Errorf("survivor lost health status: got %q, want ok", snap.Instances[0].Status)
+	}
+	if snap.Instances[0].DashboardURL != "https://new-dashboard/" {
+		t.Errorf("dashboardURL edit not applied: got %q", snap.Instances[0].DashboardURL)
+	}
+}
+
+func TestSetInstancesPrunesRemoved(t *testing.T) {
+	s := testStore()
+	now := time.Now().UnixMilli()
+	s.Apply([]traefik.InstanceResult{okResult("mgmt", 4, 0)}, now, nil)
+
+	s.SetInstances([]config.Instance{{Name: "other", URL: "https://x"}})
+
+	snap := s.Snapshot()
+	if len(snap.Instances) != 1 || snap.Instances[0].Name != "other" {
+		t.Fatalf("expected only 'other' to remain, got %+v", snap.Instances)
+	}
+	if len(snap.HTTPRouters) != 0 {
+		t.Errorf("removed instance's routers should be pruned, got %d", len(snap.HTTPRouters))
+	}
+
+	// Re-adding "mgmt" by name should not resurrect its old last-good data --
+	// it's a fresh instance from the store's perspective.
+	s.SetInstances([]config.Instance{{Name: "mgmt", URL: "https://192.168.2.157"}})
+	snap = s.Snapshot()
+	if len(snap.HTTPRouters) != 0 {
+		t.Errorf("re-added instance should start fresh, got %d routers", len(snap.HTTPRouters))
+	}
+	if snap.Instances[0].Status != "unreachable" {
+		t.Errorf("re-added instance status = %q, want unreachable (unseeded)", snap.Instances[0].Status)
+	}
+}
+
+func TestSetInstancesUnchangedReportsFalse(t *testing.T) {
+	s := testStore()
+	same := []config.Instance{{Name: "mgmt", URL: "https://192.168.2.157", DashboardURL: "https://d/"}}
+	if changed := s.SetInstances(same); changed {
+		t.Error("re-applying identical instance metadata should not report changed")
+	}
+}
+
+func TestInstanceNamesReflectsEdits(t *testing.T) {
+	s := testStore()
+	if got := s.InstanceNames(); len(got) != 1 || got[0] != "mgmt" {
+		t.Fatalf("InstanceNames = %v, want [mgmt]", got)
+	}
+	s.SetInstances([]config.Instance{
+		{Name: "mgmt", URL: "https://192.168.2.157"},
+		{Name: "new-node", URL: "https://192.168.2.99"},
+	})
+	got := s.InstanceNames()
+	if len(got) != 2 || got[0] != "mgmt" || got[1] != "new-node" {
+		t.Errorf("InstanceNames after edit = %v, want [mgmt new-node]", got)
+	}
+}
+
 func TestRouterWarnings(t *testing.T) {
 	rs := []model.Router{
 		{Name: "ok", Status: "enabled"},

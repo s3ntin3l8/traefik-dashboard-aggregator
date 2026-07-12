@@ -1,12 +1,14 @@
-// Settings page: appearance controls (direction, theme, accent, density).
-// Replaces the prototype's floating Tweaks panel.
+// Settings page: appearance controls (direction, theme, accent, density),
+// plus the instance admin panel for signed-in admins.
 import type { Tweaks } from "../lib/theme";
 import { ACCENTS } from "../lib/theme";
+import { InstanceAdmin } from "./InstanceAdmin";
 
-export function Settings({ t, setTweak, lokiEnabled }: {
+export function Settings({ t, setTweak, lokiEnabled, isAdmin }: {
   t: Tweaks;
   setTweak: <K extends keyof Tweaks>(k: K, v: Tweaks[K]) => void;
   lokiEnabled: boolean;
+  isAdmin: boolean;
 }) {
   return (
     <div className="content-wide fade-in">
@@ -61,6 +63,11 @@ export function Settings({ t, setTweak, lokiEnabled }: {
             <div className="kv"><span>Data</span><span>live via SSE</span></div>
           </div>
         </div>
+
+        {/* Editing instances requires the server's configured admin group
+            (TV_ADMIN_GROUPS) — this is display-only gating, the server
+            re-checks on every write. See docs/authentik.md. */}
+        {isAdmin && <InstanceAdmin />}
       </div>
     </div>
   );

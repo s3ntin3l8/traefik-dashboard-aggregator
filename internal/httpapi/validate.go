@@ -13,6 +13,16 @@ var instanceNameRe = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
 
 func validInstanceName(s string) bool { return instanceNameRe.MatchString(s) }
 
+// instanceKnown reports whether name is present in the live instance list.
+func instanceKnown(names []string, name string) bool {
+	for _, n := range names {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 // clampWindow ensures start <= end and the span does not exceed max, bounding
 // how much history a single Loki query can pull.
 func clampWindow(start, end time.Time, max time.Duration) (time.Time, time.Time) {

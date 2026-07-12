@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fetchLogs, fetchFeatures, fetchMe } from "./sse";
+import { fetchLogs, fetchFeatures, fetchMe, fetchInstances, createInstance, updateInstance, deleteInstance, ApiError } from "./sse";
 
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
   return Promise.resolve({
@@ -94,11 +94,16 @@ describe("fetchMe", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  const empty = { user: "", email: "", name: "", groups: "", signOutPath: "" };
+  const empty = { user: "", email: "", name: "", groups: "", signOutPath: "", isAdmin: false };
 
   it("merges the response over the empty identity defaults", async () => {
     fetchMock.mockReturnValue(jsonResponse({ user: "alice", email: "a@x.io" }));
     expect(await fetchMe()).toEqual({ ...empty, user: "alice", email: "a@x.io" });
+  });
+
+  it("carries isAdmin through from the response", async () => {
+    fetchMock.mockReturnValue(jsonResponse({ user: "alice", isAdmin: true }));
+    expect(await fetchMe()).toEqual({ ...empty, user: "alice", isAdmin: true });
   });
 
   it("returns the empty identity on a non-OK response", async () => {
@@ -109,5 +114,69 @@ describe("fetchMe", () => {
   it("returns the empty identity when the request throws", async () => {
     fetchMock.mockRejectedValue(new Error("boom"));
     expect(await fetchMe()).toEqual(empty);
+  });
+});
+
+describe("instance admin API", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const instances = [{ name: "gateway", url: "https://10.0.0.1", insecureSkipVerify: false, source: "file" }];
+
+  it("fetchInstances GETs /api/instances and returns the list", async () => {
+    fetchMock.mockReturnValue(jsonResponse({ instances }));
+    expect(await fetchInstances()).toEqual(instances);
+    expect(fetchMock).toHaveBeenCalledWith("/api/instances");
+  });
+
+  it("fetchInstances throws ApiError on a non-OK response", async () => {
+    fetchMock.mockReturnValue(jsonResponse({}, { ok: false, status: 500 }));
+    await expect(fetchInstances()).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("createInstance POSTs the fields as JSON and returns the updated list", async () => {
+    fetchMock.mockReturnValue(jsonResponse({ instances }));
+    const fields = { name: "new-node", url: "https://10.0.0.5" };
+    const out = await createInstance(fields);
+
+    expect(out).toEqual(instances);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instances");
+    expect(opts.method).toBe("POST");
+    expect(JSON.parse(opts.body)).toEqual(fields);
+  });
+
+  it("updateInstance PUTs to /api/instances/{name}, URL-encoded", async () => {
+    fetchMock.mockReturnValue(jsonResponse({ instances }));
+    await updateInstance("weird name/1", { name: "weird name/1", url: "https://x" });
+
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instances/weird%20name%2F1");
+    expect(opts.method).toBe("PUT");
+  });
+
+  it("deleteInstance DELETEs to /api/instances/{name}", async () => {
+    fetchMock.mockReturnValue(jsonResponse({ instances: [] }));
+    await deleteInstance("gateway");
+
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instances/gateway");
+    expect(opts.method).toBe("DELETE");
+  });
+
+  it("surfaces the server's {error} message via ApiError on failure", async () => {
+    fetchMock.mockReturnValue(jsonResponse({ error: "forbidden: admin group required" }, { ok: false, status: 403 }));
+    try {
+      await createInstance({ name: "x", url: "https://x" });
+      expect.unreachable("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect((e as ApiError).status).toBe(403);
+      expect((e as ApiError).message).toBe("forbidden: admin group required");
+    }
   });
 });
