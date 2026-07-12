@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/compare/v1.4.0...v1.4.1) (2026-07-12)
+
+
+### Bug Fixes
+
+* split X-authentik-groups on "|", not "," ([edf0995](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/edf0995bfb7eb34d8638992b860621e02c695b0d))
+* split X-authentik-groups on "|", not "," ([07d0d6c](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/07d0d6c234a85e77943809a7af2d5cb28157b99a))
+
 ## [1.4.0](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/compare/v1.3.0...v1.4.0) (2026-07-12)
 
 
