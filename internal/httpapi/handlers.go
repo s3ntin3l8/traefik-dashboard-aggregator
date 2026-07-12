@@ -38,7 +38,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		"user":        r.Header.Get("X-authentik-username"),
 		"email":       r.Header.Get("X-authentik-email"),
 		"name":        r.Header.Get("X-authentik-name"),
-		"groups":      r.Header.Get("X-authentik-groups"), // comma-separated
+		"groups":      r.Header.Get("X-authentik-groups"), // authentik's own format: "|"-separated
 		"signOutPath": s.signOutPath,
 		// isAdmin is display-only, toggling instance-admin UI affordances. The
 		// server re-checks the same X-authentik-groups header on every write

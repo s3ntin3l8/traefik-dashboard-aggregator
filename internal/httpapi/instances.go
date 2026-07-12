@@ -61,11 +61,17 @@ type instanceWriteRequest struct {
 // TV_ADMIN_GROUPS. This is the single source of truth for both the write
 // gate (adminGate) and the display-only "isAdmin" flag on /api/me -- the
 // latter only toggles UI affordances, it grants nothing by itself.
+//
+// authentik's forwardAuth outpost joins a user's groups with "|", not ",",
+// e.g. "authentik Admins|portainer_admin|Admins" -- group names themselves
+// may contain spaces and commas, so "|" is the only safe delimiter here.
+// TV_ADMIN_GROUPS (our own config, parsed by splitAdminGroups in main.go) is
+// a separate, deliberately comma-separated value -- don't conflate the two.
 func (s *Server) isAdmin(r *http.Request) bool {
 	if len(s.adminGroups) == 0 {
 		return false
 	}
-	for _, g := range strings.Split(r.Header.Get("X-authentik-groups"), ",") {
+	for _, g := range strings.Split(r.Header.Get("X-authentik-groups"), "|") {
 		if g = strings.TrimSpace(g); g == "" {
 			continue
 		}

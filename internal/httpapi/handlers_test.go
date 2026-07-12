@@ -65,7 +65,7 @@ func TestHandleMe_IsAdminReflectsGroupMembership(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
-	req.Header.Set("X-authentik-groups", "viewers, admins")
+	req.Header.Set("X-authentik-groups", "viewers|admins")
 	s.handleMe(rr, req)
 
 	var got map[string]any
