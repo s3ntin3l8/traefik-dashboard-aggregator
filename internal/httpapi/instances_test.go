@@ -29,7 +29,7 @@ func TestAdminGate_WrongGroupRejected(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/instances", bytes.NewBufferString(`{"name":"x","url":"https://x"}`))
-	req.Header.Set("X-authentik-groups", "viewers,everyone")
+	req.Header.Set("X-authentik-groups", "viewers|everyone")
 	s.handleCreateInstance(rr, req)
 
 	if rr.Code != http.StatusForbidden {
@@ -42,11 +42,44 @@ func TestAdminGate_MatchingGroupAllowed(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/instances", bytes.NewBufferString(`{"name":"new-node","url":"https://10.0.0.5"}`))
-	req.Header.Set("X-authentik-groups", "viewers, admins")
+	req.Header.Set("X-authentik-groups", "viewers|admins")
 	s.handleCreateInstance(rr, req)
 
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// Regression test for a real production bug: authentik's forwardAuth outpost
+// joins group names with "|", not ",". A comma-splitting isAdmin() would
+// treat this entire header as one giant (non-matching) group name and never
+// grant access, even for a user who genuinely is in the configured group.
+func TestAdminGate_RealAuthentikPipeDelimitedGroupsHeader(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"Admins"})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/instances", bytes.NewBufferString(`{"name":"new-node","url":"https://10.0.0.5"}`))
+	req.Header.Set("X-authentik-groups", "authentik Admins|portainer_admin|Hermes Users|OpenClaw Users|Admins|Plex users")
+	s.handleCreateInstance(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201 -- exact group 'Admins' is present in the pipe-delimited list; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// "authentik Admins" must not be treated as a match for the configured group
+// "Admins" just because it contains that substring -- isAdmin must split into
+// distinct group names and compare exactly, not do a substring search.
+func TestAdminGate_SimilarButDistinctGroupNameDoesNotMatch(t *testing.T) {
+	s := testServerWithAdmin(t, nil, []string{"Admins"})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/instances", bytes.NewBufferString(`{"name":"x","url":"https://x"}`))
+	req.Header.Set("X-authentik-groups", "authentik Admins|portainer_admin")
+	s.handleCreateInstance(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 -- 'authentik Admins' is a distinct group from 'Admins'", rr.Code)
 	}
 }
 
@@ -256,13 +289,13 @@ func TestIsAdmin_IgnoresWhitespaceOnlyGroupEntries(t *testing.T) {
 	s := testServerWithAdmin(t, nil, []string{"admins"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
-	req.Header.Set("X-authentik-groups", " , ,  , admins")
+	req.Header.Set("X-authentik-groups", " | |  | admins")
 	if !s.isAdmin(req) {
 		t.Error("isAdmin should skip blank entries and still match admins")
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/me", nil)
-	req.Header.Set("X-authentik-groups", " , ,  ,")
+	req.Header.Set("X-authentik-groups", " | |  |")
 	if s.isAdmin(req) {
 		t.Error("isAdmin should be false when every entry is blank")
 	}

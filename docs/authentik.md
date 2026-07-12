@@ -363,9 +363,20 @@ why §3's two rules are load-bearing here specifically. `POST`/`PUT`/`DELETE
 intersect a configured admin set, or the request gets `403`.
 
 1. Set `TV_ADMIN_GROUPS` in `.env` to a comma-separated list of authentik
-   group names (e.g. `TV_ADMIN_GROUPS=infra-admins`). Members of any listed
-   group can edit instances; everyone else gets read-only access to
-   `GET /api/instances` (which never contains secrets, so it's left ungated).
+   group names, exactly as they're named in authentik (e.g.
+   `TV_ADMIN_GROUPS=infra-admins,Admins` — case-sensitive, no fuzzy match).
+   Members of any listed group can edit instances; everyone else gets
+   read-only access to `GET /api/instances` (which never contains secrets, so
+   it's left ungated).
+
+   **Don't confuse this with the incoming `X-authentik-groups` header.**
+   `TV_ADMIN_GROUPS` is our own config value and is comma-separated by our
+   choice; the header authentik's forwardAuth outpost actually sends is
+   **pipe (`|`) separated** (e.g. `authentik Admins|portainer_admin|Admins`)
+   — group names can themselves contain spaces or commas, so `isAdmin` splits
+   on `|`. If you're debugging a "the panel isn't showing up" report, check
+   `GET /api/me`'s `groups` field in the browser first to see the literal
+   header value and confirm the exact group name/casing.
 2. **Unset or empty is the default and fails closed** — instance editing is
    entirely disabled (every write gets `403`) until you opt in, not silently
    open.
