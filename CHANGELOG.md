@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/compare/v1.3.0...v1.4.0) (2026-07-12)
+
+
+### Features
+
+* allow live-editing Traefik instances from the UI ([c626ace](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/c626ace519ab37afa25040536261c0ceeca4ec37))
+
+
+### Bug Fixes
+
+* **deps:** bump Go toolchain to 1.25.12 for GO-2026-5856 ([9b24893](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/9b24893300be0c4eb823c13a09621371169146be))
+
 ## [1.3.0](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/compare/v1.2.0...v1.3.0) (2026-06-19)
 
 
