@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.2](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/compare/v1.4.1...v1.4.2) (2026-08-26)
+
+
+### Bug Fixes
+
+* **deps:** bump Go toolchain to 1.25.14 for seven stdlib CVEs ([59835a6](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/59835a62b62aeb4267d687370978bd98032f1d3e))
+* **deps:** bump Go toolchain to 1.25.14 for seven stdlib CVEs ([2676878](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/commit/2676878a4e6f444595da91ef96b08d74cb0b5c45))
+
 ## [1.4.1](https://github.com/s3ntin3l8/traefik-dashboard-aggregator/compare/v1.4.0...v1.4.1) (2026-07-12)
 
 
