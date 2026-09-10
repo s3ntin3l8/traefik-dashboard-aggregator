@@ -36,3 +36,6 @@ web/tsconfig.tsbuildinfo
 .claude/
 docs/superpowers/
 tmp/
+
+# Developer worktrees (per AGENTS.md make wt convention)
+.wt/
