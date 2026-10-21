@@ -23,6 +23,10 @@ jobs:
       working-directory: web
       cache-dependency-path: web/package-lock.json
       test-script: test:coverage
+      # Only the files this push touched can have introduced a secret. The
+      # baseline is keyed by filename and line number, so an unchanged file
+      # keeps its entry and the scan stays consistent.
+      detect-secrets-scope: "changed"
     secrets: inherit
 
   docker:
