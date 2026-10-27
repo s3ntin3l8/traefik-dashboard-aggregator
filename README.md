@@ -164,7 +164,7 @@ view). Other views work on any v3.
 **GitHub Actions** (`.github/workflows/`):
 - `ci.yml` — on every push/PR to `main`: Go `gofmt`/`vet`/`build`/`test -race`,
   frontend typecheck + build, and a Docker image build (no push).
-- `release.yml` — on `v*` tags only, publishes a multi-arch image to
+- `release-please.yml` — on push to `main` (Release Please) and manual dispatch; publishes only when a release is cut, a multi-arch image to
   `ghcr.io/<owner>/<repo>` tagged `:X.Y.Z`, `:X.Y`, `:latest` (and `:sha-…`).
   Pushes to `main` are build-validated by `ci.yml` but not published, so the
   registry only ever holds released images.
